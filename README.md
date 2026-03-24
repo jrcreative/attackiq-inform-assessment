@@ -1,1 +1,1 @@
-# attackiq-inform-assessment
+# AttackIQ Inform Assessment Tool
