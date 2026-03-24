@@ -1,0 +1,30 @@
+{
+    "name": "attackiq-inform-assessment",
+    "version": "1.0.0",
+    "description": "AttackIQ Inform Assessment Plugin",
+    "main": "build/index.js",
+    "scripts": {
+        "build": "wp-scripts build",
+        "start": "wp-scripts start",
+        "format": "wp-scripts format",
+        "lint:js": "wp-scripts lint-js",
+        "packages-update": "wp-scripts packages-update",
+        "zip": "npm run build && cd .. && zip -r attackiq-inform-assessment.zip attackiq-inform-assessment/ -x 'attackiq-inform-assessment/node_modules/*' 'attackiq-inform-assessment/.git/*' 'attackiq-inform-assessment/.DS_Store' 'attackiq-inform-assessment/src/*' 'attackiq-inform-assessment/CLAUDE.md' 'attackiq-inform-assessment/package-lock.json'"
+    },
+    "keywords": [
+        "wordpress",
+        "react",
+        "plugin"
+    ],
+    "author": "Volume11",
+    "license": "UNLICENSED",
+    "dependencies": {
+        "@wordpress/scripts": "^26.0.0",
+        "chart.js": "^4.5.1",
+        "html2canvas": "^1.4.1",
+        "jspdf": "^4.0.0",
+        "react": "^18.2.0",
+        "react-chartjs-2": "^5.3.1",
+        "react-dom": "^18.2.0"
+    }
+}
