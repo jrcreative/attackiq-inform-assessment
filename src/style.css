@@ -727,3 +727,37 @@ body.admin-bar .aiq-wizard-header {
 .aiq-na-info-icon:hover svg {
     opacity: 0.8;
 }
+/* Phase 2 — dropdown question types (Threat Profile) */
+.aiq-dropdown-wrapper select,
+.aiq-dropdown-multi-wrapper select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%2340008f' d='M6 8L0 0h12z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 10px 7px;
+    padding-right: 32px !important;
+}
+
+.aiq-dropdown-wrapper select:focus,
+.aiq-dropdown-multi-wrapper select:focus {
+    outline: none;
+    border-color: #40008f !important;
+    box-shadow: 0 0 0 2px rgba(64, 0, 143, 0.15);
+}
+
+.aiq-dropdown-multi-wrapper .aiq-chip:hover {
+    background: #ebdcff;
+}
+
+.aiq-chip button:hover {
+    color: #2d0064 !important;
+}
+
+/* Phase 2 — Skip CTEM banner */
+.aiq-ctem-skip-banner input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}

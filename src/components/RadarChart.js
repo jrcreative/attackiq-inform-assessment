@@ -40,6 +40,10 @@ const RadarChart = ({ scores }) => {
 
     scores.scoresBySection.forEach(section => {
         if (!section.questions) return;
+        // Threat Profile is captured for context only — never plot it. Same
+        // applies to any other section flagged as unscored (e.g. CTEM when
+        // the user chose Skip CTEM Assessment).
+        if (section.scored === false) return;
         section.questions.forEach(q => {
             labels.push(q.uid || q.componentKey);
             dataValues.push(getComponentScore(q));

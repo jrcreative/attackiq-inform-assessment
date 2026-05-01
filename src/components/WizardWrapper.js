@@ -9,53 +9,6 @@ import { generateMitreJSON } from '../utils/jsonGenerator';
 import { submitResults } from '../utils/api';
 import MarketoModal from './MarketoModal';
 
-const groupDataBySection = (flatData) => {
-    const sections = ['CTI', 'DM', 'TE'];
-    const grouped = {};
-    sections.forEach(sec => {
-        grouped[sec] = flatData.filter(item => item['Dimension ID'] === sec);
-    });
-    return grouped;
-};
-
-const consolidateQuestions = (rawData) => {
-    const questionsMap = {};
-    rawData.forEach(row => {
-        const componentKey = `${row['Dimension ID']}.${row['Component ID']}`;
-
-        if (!questionsMap[componentKey]) {
-            questionsMap[componentKey] = {
-                componentKey,
-                Component: row.Component,
-                Question: row.Question,
-                'Question Type': row['Question Type'],
-                'Dimension ID': row['Dimension ID'],
-                Dimension: row.Dimension,
-                'Component ID': row['Component ID'],
-                'Component Weight': row['Component Weight'],
-                'Dimension Weight': row['Dimension Weight'],
-                choices: []
-            };
-        }
-
-        questionsMap[componentKey].choices.push({
-            uid: row.UID,
-            description: row['Level Description'],
-            points: row.Points,
-            impact: row.Impact,
-            complexity: row.Complexity,
-            tooltip: row['Level Tooltip'],
-            levelId: row['Level ID']
-        });
-    });
-
-    Object.values(questionsMap).forEach(q => {
-        q.choices.sort((a, b) => a.levelId - b.levelId);
-    });
-
-    return Object.values(questionsMap);
-};
-
 const BRAND_COLORS = {
     primary: '#40008f',
     primaryDark: '#2d0064',
@@ -68,9 +21,32 @@ const BRAND_COLORS = {
     textLight: '#65616b'
 };
 
+// Visual identity per assessment section. Used by tab underline, results
+// breakdown headers, and the impact/complexity matrix legend so the user has a
+// consistent color cue across the experience.
+const SECTION_VISUALS = {
+    CTI:  { tab: '#ffcc00',           bg: '#ffcc00', text: '#000', label: 'CTI'  },
+    DM:   { tab: '#36bae4',           bg: '#36bae4', text: '#000', label: 'DM'   },
+    TE:   { tab: '#f02c68',           bg: '#f02c68', text: '#fff', label: 'TE'   },
+    CTEM: { tab: '#7b3ff2',           bg: '#7b3ff2', text: '#fff', label: 'CTEM' },
+    TP:   { tab: BRAND_COLORS.accent, bg: BRAND_COLORS.accent, text: '#fff', label: 'TP' }
+};
+
+// Maps a section_id to the human label rendered in the tab strip.
+const SECTION_TAB_LABELS = {
+    CTI:  'Cyber Threat Intelligence',
+    DM:   'Defensive Measures',
+    TE:   'Test & Evaluation',
+    CTEM: 'CTEM',
+    TP:   'Threat Profile'
+};
+
+const RESULTS_STEP_KEY = 'RESULTS';
+const isSectionEntry = (entry) => Boolean(entry && entry.section_id && Array.isArray(entry.questions));
+
 const WizardWrapper = () => {
     const { state, dispatch } = useAssessment();
-    const { step, data, answers } = state;
+    const { step, data, answers, ctemSkipped } = state;
     const [isGenerating, setIsGenerating] = useState(false);
     const [showMarketoModal, setShowMarketoModal] = useState(false);
     const [pendingDownloadType, setPendingDownloadType] = useState(null);
@@ -85,7 +61,25 @@ const WizardWrapper = () => {
     const gateDownloads = marketoConfig.gateDownloads && marketoConfig.formId;
     const ctaUrl = config.contactUrl || '';
     const ctaText = config.contactButtonText || 'Improve Your Score';
-    const siteUrl = config.siteUrl || '';
+
+    // Pull section_id list from the data file so adding a tab is a data-only
+    // change. Fall back to the canonical order if a section is missing.
+    const sectionEntries = useMemo(
+        () => (Array.isArray(data) ? data.filter(isSectionEntry) : []),
+        [data]
+    );
+
+    const sections = useMemo(() => {
+        const ids = sectionEntries.map(s => s.section_id);
+        return [...ids, RESULTS_STEP_KEY];
+    }, [sectionEntries]);
+
+    const totalSteps = sections.length;
+    const lastQuestionStep = totalSteps - 1;
+    const isResultsStep = step === lastQuestionStep;
+    const currentSectionKey = sections[step];
+    const currentSection = sectionEntries.find(s => s.section_id === currentSectionKey);
+    const currentQuestions = currentSection ? currentSection.questions : [];
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -180,17 +174,7 @@ const WizardWrapper = () => {
         return () => document.removeEventListener('click', handleClickOutside);
     }, [showDownloadMenu]);
 
-    const structuredData = useMemo(() => {
-        if (!data || !Array.isArray(data)) return {};
-        const allQuestions = consolidateQuestions(data);
-        return groupDataBySection(allQuestions);
-    }, [data]);
-
-    const sections = ['CTI', 'DM', 'TE', 'RESULTS'];
-    const currentSectionKey = sections[step];
-    const currentQuestions = structuredData[currentSectionKey] || [];
-
-    const results = step === 3 ? processResults(data, answers) : null;
+    const results = isResultsStep ? processResults(data, answers, { ctemSkipped }) : null;
 
     const getOverallLevel = (score) => {
         if (score < 0) return -1;
@@ -206,21 +190,17 @@ const WizardWrapper = () => {
     const overallScoreLabel = getScoreLabel(overallScoreLevel);
 
     const handleNext = async () => {
-        if (step === 2) {
-            const results = processResults(data, answers);
+        // When advancing onto the Results step, persist the assessment so the
+        // submission is captured even if the user closes the tab before
+        // downloading the PDF/JSON.
+        if (step === lastQuestionStep - 1) {
+            const finalResults = processResults(data, answers, { ctemSkipped });
 
-            submitResults(answers, results).then(success => {
+            submitResults(answers, finalResults).then(success => {
                 if (success) console.log('Results Saved!');
             });
-
-            dispatch({ type: 'NEXT_STEP' });
-        } else {
-            dispatch({ type: 'NEXT_STEP' });
         }
-    };
-
-    const handlePrev = () => {
-        dispatch({ type: 'PREV_STEP' });
+        dispatch({ type: 'NEXT_STEP' });
     };
 
     const downloadPDF = useCallback(async () => {
@@ -243,7 +223,7 @@ const WizardWrapper = () => {
         if (!results || !data) return;
 
         try {
-            const jsonData = generateMitreJSON(data, answers, results);
+            const jsonData = generateMitreJSON(data, answers, { ctemSkipped });
             const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -257,7 +237,7 @@ const WizardWrapper = () => {
             console.error('JSON generation error:', err);
         }
         setShowDownloadMenu(false);
-    }, [results, data, answers]);
+    }, [results, data, answers, ctemSkipped]);
 
     const handleDownloadRequest = (type) => {
         if (gateDownloads && !userEmail) {
@@ -290,25 +270,78 @@ const WizardWrapper = () => {
         }, 500);
     };
 
-    const sectionLabels = {
-        'CTI': '1. Cyber Threat Intelligence',
-        'DM': '2. Defensive Measures',
-        'TE': '3. Test & Evaluation',
-        'RESULTS': '4. Results'
+    // Section breakdown for the Results page hides the unscored Threat Profile
+    // pillar and any section whose user-skipped flag is set (CTEM today). The
+    // upstream JSON still records every section so historical comparisons can
+    // line up — only the on-page visualisation suppresses unscored entries.
+    const visibleScoredSections = (results?.scoresBySection || []).filter(s => s.scored);
+
+    const renderSectionTabLabel = (sec, idx) => {
+        if (sec === RESULTS_STEP_KEY) return `${idx + 1}. Results`;
+        const labelText = SECTION_TAB_LABELS[sec] || sec;
+        return `${idx + 1}. ${labelText}`;
     };
+
+    const renderCtemSkipBanner = () => {
+        if (currentSectionKey !== 'CTEM') return null;
+        return (
+            <div
+                className="aiq-ctem-skip-banner"
+                style={{
+                    marginBottom: '24px',
+                    padding: '16px 18px',
+                    background: ctemSkipped ? '#f5f5f5' : '#f8f5fc',
+                    border: `1px solid ${ctemSkipped ? '#ddd' : '#e2d4f1'}`,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                }}
+            >
+                <input
+                    id="aiq-ctem-skip-checkbox"
+                    type="checkbox"
+                    checked={ctemSkipped}
+                    onChange={(e) => dispatch({ type: 'SET_CTEM_SKIPPED', value: e.target.checked })}
+                    style={{ marginTop: '4px', accentColor: BRAND_COLORS.primary }}
+                />
+                <label htmlFor="aiq-ctem-skip-checkbox" style={{ flex: 1, cursor: 'pointer', fontSize: '14px', lineHeight: '1.5', color: BRAND_COLORS.text }}>
+                    <strong>Skip CTEM Assessment.</strong>{' '}
+                    Exclude CTEM from your overall maturity score, the impact / complexity matrix, recommendations, and the radar chart. Useful if your organisation does not yet treat CTEM as a distinct discipline.
+                </label>
+            </div>
+        );
+    };
+
+    const renderCtemSkippedNote = () => (
+        <div
+            style={{
+                padding: '32px',
+                background: '#f8f8f8',
+                border: '1px dashed #ccc',
+                borderRadius: '6px',
+                color: BRAND_COLORS.textLight,
+                fontSize: '14px',
+                lineHeight: '1.6'
+            }}
+        >
+            CTEM has been excluded from your assessment. Uncheck <em>Skip CTEM Assessment</em> above if you want to answer this section and have it factor into your maturity score.
+        </div>
+    );
 
     return (
         <div className="aiq-assessment-container" ref={containerRef}>
             <div className="aiq-wizard-header" ref={wizardHeaderRef}>
                 <ul className="aiq-steps-nav">
                     {sections.map((sec, idx) => {
-                        const stepColors = [BRAND_COLORS.primary, '#36bae4', '#f02c68', BRAND_COLORS.primaryDark];
+                        const visuals = SECTION_VISUALS[sec];
+                        const tabAccent = visuals ? visuals.tab : BRAND_COLORS.primaryDark;
                         const isActive = idx === step;
                         const isCompleted = idx < step;
 
                         let tabStyle = {};
                         if (isActive) {
-                            tabStyle = { borderBottomColor: stepColors[idx], color: '#000' };
+                            tabStyle = { borderBottomColor: tabAccent, color: '#000' };
                         } else {
                             tabStyle = { color: isCompleted ? BRAND_COLORS.primary : '#666', cursor: 'pointer' };
                         }
@@ -316,9 +349,12 @@ const WizardWrapper = () => {
                         const handleTabClick = () => {
                             if (idx === step) return;
 
-                            if (idx === 3 && step < 3) {
-                                const results = processResults(data, answers);
-                                submitResults(answers, results).then(success => {
+                            // If the user is jumping straight to the Results
+                            // step from an earlier tab, persist the in-progress
+                            // submission so we still capture the lead.
+                            if (idx === lastQuestionStep && step < lastQuestionStep) {
+                                const finalResults = processResults(data, answers, { ctemSkipped });
+                                submitResults(answers, finalResults).then(success => {
                                     if (success) console.log('Results Saved!');
                                 });
                             }
@@ -333,7 +369,7 @@ const WizardWrapper = () => {
                                 style={tabStyle}
                                 onClick={handleTabClick}
                             >
-                                {sectionLabels[sec]}
+                                {renderSectionTabLabel(sec, idx)}
                             </li>
                         );
                     })}
@@ -344,16 +380,19 @@ const WizardWrapper = () => {
             </div>
 
             <div className="aiq-wizard-content">
-                {step < 3 ? (
+                {!isResultsStep ? (
                     <div className="aiq-wizard-step">
-                        {currentQuestions.map(q => (
-                            <QuestionBlock
-                                key={q.componentKey}
-                                question={q}
-                                dispatch={dispatch}
-                                currentAnswer={answers[q.componentKey]}
-                            />
-                        ))}
+                        {renderCtemSkipBanner()}
+                        {currentSectionKey === 'CTEM' && ctemSkipped ? (
+                            renderCtemSkippedNote()
+                        ) : (
+                            currentQuestions.map(q => (
+                                <QuestionBlock
+                                    key={q.uid || q.componentKey}
+                                    question={q}
+                                />
+                            ))
+                        )}
                     </div>
                 ) : results ? (
                     <div id="aiq-results-print-area" className="aiq-results-container">
@@ -386,6 +425,11 @@ const WizardWrapper = () => {
                                         month: 'long',
                                         day: 'numeric'
                                     })}
+                                    {ctemSkipped && (
+                                        <span style={{ marginLeft: '10px', fontStyle: 'italic', color: '#e5dfec' }}>
+                                            · CTEM excluded from scoring
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                             <div style={{ textAlign: 'center' }}>
@@ -414,21 +458,15 @@ const WizardWrapper = () => {
                                 Score Breakdown
                             </h3>
 
-                            {results.scoresBySection && results.scoresBySection.map((section) => {
-                                const sectionColors = {
-                                    'CTI': { bg: '#ffcc00', text: '#000', label: 'CTI' },
-                                    'DM': { bg: '#36bae4', text: '#000', label: 'DM' },
-                                    'TE': { bg: '#f02c68', text: '#fff', label: 'TE' }
-                                };
-                                const colorScheme = sectionColors[section.section_id] || { bg: '#ccc', text: '#000', label: section.section_id };
-
+                            {visibleScoredSections.map((section) => {
+                                const visuals = SECTION_VISUALS[section.section_id] || { bg: '#ccc', text: '#000', label: section.section_id };
                                 const sectionScore = calculateSectionScore(section);
 
                                 return (
                                     <div key={section.section_id} style={{ marginBottom: '15px' }}>
                                         <div style={{
-                                            background: colorScheme.bg,
-                                            color: colorScheme.text,
+                                            background: visuals.bg,
+                                            color: visuals.text,
                                             padding: '8px 14px',
                                             fontWeight: '700',
                                             fontSize: '13px',
@@ -438,7 +476,7 @@ const WizardWrapper = () => {
                                             alignItems: 'center',
                                             borderRadius: '4px'
                                         }}>
-                                            <span>{colorScheme.label} - {section.name}</span>
+                                            <span>{visuals.label} - {section.shortname || section.name}</span>
                                             <span style={{
                                                 background: 'rgba(255,255,255,0.2)',
                                                 padding: '2px 10px',
@@ -496,6 +534,7 @@ const WizardWrapper = () => {
                                                     </span>
                                                 );
 
+                                                const headingText = q.heading || '';
                                                 return (
                                                     <div key={q.uid} style={{
                                                         display: 'flex',
@@ -504,7 +543,7 @@ const WizardWrapper = () => {
                                                         borderBottom: '1px solid #f0f0f0'
                                                     }}>
                                                         <span style={{ flex: 1, paddingRight: '10px', color: isNA ? '#bbb' : BRAND_COLORS.textLight, fontStyle: isNA ? 'italic' : 'normal' }}>
-                                                            {q.uid} - {q.heading.substring(0, 45)}{q.heading.length > 45 ? '...' : ''}
+                                                            {q.uid} - {headingText.substring(0, 45)}{headingText.length > 45 ? '...' : ''}
                                                         </span>
                                                         <span style={{
                                                             fontWeight: '600',
@@ -666,7 +705,7 @@ const WizardWrapper = () => {
 
             <div className="aiq-wizard-footer">
                 <div>
-                    {step === 3 ? (
+                    {isResultsStep ? (
                         <button
                             className="aiq-btn aiq-btn-secondary"
                             onClick={() => dispatch({ type: 'RESET' })}
@@ -686,7 +725,7 @@ const WizardWrapper = () => {
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    {step < sections.length - 1 ? (
+                    {!isResultsStep ? (
                         <button
                             className="aiq-btn aiq-btn-primary"
                             onClick={handleNext}
@@ -770,7 +809,13 @@ const WizardWrapper = () => {
                     teScore: results.scoresBySection?.find(s => s.section_id === 'TE')
                         ? calculateSectionScore(results.scoresBySection.find(s => s.section_id === 'TE'))
                         : 0,
-                    jsonData: generateMitreJSON(data, answers, results),
+                    ctemScore: ctemSkipped ? null : (
+                        results.scoresBySection?.find(s => s.section_id === 'CTEM')
+                            ? calculateSectionScore(results.scoresBySection.find(s => s.section_id === 'CTEM'))
+                            : 0
+                    ),
+                    ctemSkipped,
+                    jsonData: generateMitreJSON(data, answers, { ctemSkipped }),
                     assessmentDate: new Date().toISOString(),
                     leadSource: 'INFORM Assessment - AttackIQ Website'
                 } : null}
