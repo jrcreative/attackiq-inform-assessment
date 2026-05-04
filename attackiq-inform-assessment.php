@@ -5,6 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-db.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-migrate.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-submission.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
 
@@ -210,6 +211,12 @@ class AIQ_Inform_Assessment {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+
+		$cpt_count   = AIQ_DB::count_cpt_posts();
+		$table_count = AIQ_DB::count_rows();
+		$progress    = AIQ_Migrate::get_progress();
+		$nonce       = wp_create_nonce( 'wp_rest' );
+		$rest_url    = esc_url_raw( rest_url( 'aiq/v1/' ) );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -220,6 +227,63 @@ class AIQ_Inform_Assessment {
 				submit_button();
 				?>
 			</form>
+
+			<hr />
+			<h2><?php esc_html_e( 'Database & Backfill', 'attackiq-inform-assessment' ); ?></h2>
+			<p><?php esc_html_e( 'New submissions write to a dedicated database table for faster reporting and Salesforce hand-off. Existing submissions stored on the legacy custom post type can be backfilled into the new table on demand.', 'attackiq-inform-assessment' ); ?></p>
+
+			<table class="widefat striped" style="max-width:520px;margin-bottom:20px;">
+				<tbody>
+					<tr><th><?php esc_html_e( 'Submissions in legacy CPT', 'attackiq-inform-assessment' ); ?></th><td id="aiq-cpt-count"><?php echo esc_html( $cpt_count ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Submissions in new table', 'attackiq-inform-assessment' ); ?></th><td id="aiq-table-count"><?php echo esc_html( $table_count ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Backfill last run', 'attackiq-inform-assessment' ); ?></th><td><?php echo $progress['completed_at'] ? esc_html( $progress['completed_at'] ) . ' (UTC)' : esc_html__( 'Not run', 'attackiq-inform-assessment' ); ?></td></tr>
+				</tbody>
+			</table>
+
+			<button type="button" id="aiq-backfill-run" class="button button-primary"><?php esc_html_e( 'Run Backfill', 'attackiq-inform-assessment' ); ?></button>
+			<span id="aiq-backfill-status" style="margin-left:12px;"></span>
+
+			<script>
+			(function(){
+				var btn = document.getElementById('aiq-backfill-run');
+				var statusEl = document.getElementById('aiq-backfill-status');
+				var tableCountEl = document.getElementById('aiq-table-count');
+				if (!btn) return;
+
+				var endpoint = <?php echo wp_json_encode( $rest_url ); ?> + '_admin/backfill-batch';
+				var nonce    = <?php echo wp_json_encode( $nonce ); ?>;
+
+				function runBatch(){
+					statusEl.textContent = '<?php echo esc_js( __( 'Running…', 'attackiq-inform-assessment' ) ); ?>';
+					fetch(endpoint, {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce }
+					}).then(function(r){ return r.json(); }).then(function(data){
+						if (data.error) {
+							statusEl.textContent = 'Error: ' + data.error;
+							btn.disabled = false;
+							return;
+						}
+						tableCountEl.textContent = data.migrated;
+						statusEl.textContent = data.migrated + ' migrated · ' + data.skipped + ' skipped · ' + data.remaining + ' remaining';
+						if (data.done) {
+							btn.disabled = false;
+						} else {
+							setTimeout(runBatch, 100);
+						}
+					}).catch(function(err){
+						statusEl.textContent = 'Error: ' + err.message;
+						btn.disabled = false;
+					});
+				}
+
+				btn.addEventListener('click', function(){
+					btn.disabled = true;
+					runBatch();
+				});
+			})();
+			</script>
 
 			<hr />
 			<h2><?php esc_html_e( 'Shortcode Usage', 'attackiq-inform-assessment' ); ?></h2>
