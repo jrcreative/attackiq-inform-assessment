@@ -4,8 +4,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-db.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-submission.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
+
+// Run dbDelta on activation. The maybe_upgrade() call inside init also catches
+// existing live installs whose schema version is missing or stale.
+register_activation_hook( __FILE__, array( 'AIQ_DB', 'install' ) );
 
 class AIQ_Inform_Assessment {
 
@@ -15,6 +20,7 @@ class AIQ_Inform_Assessment {
 
 	public function __construct() {
 		add_action( 'init', array( $this, 'register_scripts' ) );
+		add_action( 'init', array( 'AIQ_DB', 'maybe_upgrade' ) );
 		add_shortcode( 'inform_assessment', array( $this, 'render_shortcode' ) );
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
