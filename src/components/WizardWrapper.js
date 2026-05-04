@@ -196,7 +196,11 @@ const WizardWrapper = () => {
         if (step === lastQuestionStep - 1) {
             const finalResults = processResults(data, answers, { ctemSkipped });
 
-            submitResults(answers, finalResults).then(success => {
+            submitResults(answers, finalResults, {
+                data,
+                ctemSkipped,
+                lead: userEmail ? { email: userEmail } : {},
+            }).then(success => {
                 if (success) console.log('Results Saved!');
             });
         }
@@ -354,7 +358,11 @@ const WizardWrapper = () => {
                             // submission so we still capture the lead.
                             if (idx === lastQuestionStep && step < lastQuestionStep) {
                                 const finalResults = processResults(data, answers, { ctemSkipped });
-                                submitResults(answers, finalResults).then(success => {
+                                submitResults(answers, finalResults, {
+                                    data,
+                                    ctemSkipped,
+                                    lead: userEmail ? { email: userEmail } : {},
+                                }).then(success => {
                                     if (success) console.log('Results Saved!');
                                 });
                             }
