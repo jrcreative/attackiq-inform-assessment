@@ -34,6 +34,12 @@ class AIQ_API {
 			'permission_callback' => '__return_true',
 		) );
 
+		register_rest_route( 'aiq/v1', '/submissions', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_list_submissions' ),
+			'permission_callback' => array( 'AIQ_Auth', 'rest_permission' ),
+		) );
+
 		register_rest_route( 'aiq/v1', '/_admin/backfill-batch', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_backfill_batch' ),
@@ -133,6 +139,80 @@ class AIQ_API {
 		}
 
 		return rest_ensure_response( $response );
+	}
+
+	/**
+	 * GET /aiq/v1/submissions — paginated, filterable list.
+	 *
+	 * Heavy fields (answers_json) are intentionally omitted from list
+	 * responses; consumers can fetch the single-record endpoint for the
+	 * full payload. Pagination follows WP Core REST conventions
+	 * (X-WP-Total / X-WP-TotalPages headers).
+	 */
+	public function handle_list_submissions( $request ) {
+		$args = array(
+			'date_from'    => $request->get_param( 'date_from' ),
+			'date_to'      => $request->get_param( 'date_to' ),
+			'min_score'    => $request->get_param( 'min_score' ),
+			'max_score'    => $request->get_param( 'max_score' ),
+			'sector'       => $request->get_param( 'sector' ),
+			'email'        => $request->get_param( 'email' ),
+			'ctem_skipped' => $request->get_param( 'ctem_skipped' ),
+			'page'         => $request->get_param( 'page' ) ?: 1,
+			'per_page'     => $request->get_param( 'per_page' ) ?: 25,
+			'orderby'      => $request->get_param( 'orderby' ) ?: 'created_at',
+			'order'        => $request->get_param( 'order' ) ?: 'DESC',
+		);
+
+		// Treat empty-string filters as absent so callers can omit them.
+		foreach ( array( 'min_score', 'max_score', 'ctem_skipped' ) as $k ) {
+			if ( '' === $args[ $k ] || null === $args[ $k ] ) {
+				$args[ $k ] = null;
+			}
+		}
+
+		$result = AIQ_DB::query_submissions( $args );
+
+		$shaped = array_map( array( $this, 'shape_list_row' ), $result['rows'] );
+
+		$response = rest_ensure_response( $shaped );
+		$per_page = max( 1, min( 100, intval( $args['per_page'] ) ) );
+		$response->header( 'X-WP-Total', (string) $result['total'] );
+		$response->header( 'X-WP-TotalPages', (string) max( 1, (int) ceil( $result['total'] / $per_page ) ) );
+
+		return $response;
+	}
+
+	private function shape_list_row( array $row ) {
+		return array(
+			'id'             => intval( $row['id'] ),
+			'created_at'     => $row['created_at'],
+			'email'          => $row['email'],
+			'first_name'     => $row['first_name'],
+			'last_name'      => $row['last_name'],
+			'company'        => $row['company'],
+			'sector'         => $row['sector'],
+			'region'         => $row['region'],
+			'revenue_band'   => $row['revenue_band'],
+			'headcount_band' => $row['headcount_band'],
+			'regulatory'     => $this->maybe_decode( $row['regulatory_json'] ),
+			'data_sensitivity' => $this->maybe_decode( $row['data_sensitivity_json'] ),
+			'overall_score'  => null !== $row['overall_score'] ? floatval( $row['overall_score'] ) : null,
+			'cti_score'      => null !== $row['cti_score'] ? intval( $row['cti_score'] ) : null,
+			'dm_score'       => null !== $row['dm_score'] ? intval( $row['dm_score'] ) : null,
+			'te_score'       => null !== $row['te_score'] ? intval( $row['te_score'] ) : null,
+			'ctem_score'     => null !== $row['ctem_score'] ? intval( $row['ctem_score'] ) : null,
+			'ctem_skipped'   => (bool) $row['ctem_skipped'],
+			'maturity_level' => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
+		);
+	}
+
+	private function maybe_decode( $json ) {
+		if ( empty( $json ) ) {
+			return null;
+		}
+		$decoded = json_decode( $json, true );
+		return ( JSON_ERROR_NONE === json_last_error() ) ? $decoded : null;
 	}
 
 	public function handle_backfill_batch( $request ) {

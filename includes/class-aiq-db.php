@@ -140,6 +140,106 @@ class AIQ_DB {
 		return (int) $wpdb->insert_id;
 	}
 
+	/**
+	 * Whitelisted columns the external API is allowed to sort on. Anything
+	 * else falls back to created_at DESC.
+	 */
+	const ALLOWED_ORDERBY = array( 'id', 'created_at', 'overall_score', 'sector', 'email' );
+
+	/**
+	 * Run a filtered query against wp_aiq_submissions.
+	 *
+	 * Returns ['rows' => array, 'total' => int]. Caller is responsible for
+	 * authorization — this method is shared by the external API and the
+	 * upcoming wp-admin list UI.
+	 */
+	public static function query_submissions( array $args = array() ) {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		$defaults = array(
+			'date_from'    => '',
+			'date_to'      => '',
+			'min_score'    => null,
+			'max_score'    => null,
+			'sector'       => '',
+			'email'        => '',
+			'ctem_skipped' => null,
+			'page'         => 1,
+			'per_page'     => 25,
+			'orderby'      => 'created_at',
+			'order'        => 'DESC',
+		);
+		$args = array_merge( $defaults, $args );
+
+		$where  = array( '1=1' );
+		$params = array();
+
+		if ( ! empty( $args['date_from'] ) ) {
+			$where[]  = 'created_at >= %s';
+			$params[] = $args['date_from'];
+		}
+		if ( ! empty( $args['date_to'] ) ) {
+			$where[]  = 'created_at <= %s';
+			$params[] = $args['date_to'];
+		}
+		if ( null !== $args['min_score'] && '' !== $args['min_score'] ) {
+			$where[]  = 'overall_score >= %f';
+			$params[] = floatval( $args['min_score'] );
+		}
+		if ( null !== $args['max_score'] && '' !== $args['max_score'] ) {
+			$where[]  = 'overall_score <= %f';
+			$params[] = floatval( $args['max_score'] );
+		}
+		if ( ! empty( $args['sector'] ) ) {
+			$where[]  = 'sector = %s';
+			$params[] = $args['sector'];
+		}
+		if ( ! empty( $args['email'] ) ) {
+			$where[]  = 'email LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $args['email'] ) . '%';
+		}
+		if ( null !== $args['ctem_skipped'] ) {
+			$where[]  = 'ctem_skipped = %d';
+			$params[] = $args['ctem_skipped'] ? 1 : 0;
+		}
+
+		$orderby = in_array( $args['orderby'], self::ALLOWED_ORDERBY, true ) ? $args['orderby'] : 'created_at';
+		$order   = strtoupper( $args['order'] ) === 'ASC' ? 'ASC' : 'DESC';
+
+		$per_page = max( 1, min( 100, intval( $args['per_page'] ) ) );
+		$page     = max( 1, intval( $args['page'] ) );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		$where_sql = implode( ' AND ', $where );
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
+		$total = empty( $params )
+			? (int) $wpdb->get_var( $count_sql )
+			: (int) $wpdb->get_var( $wpdb->prepare( $count_sql, $params ) );
+
+		$select_sql = "SELECT id, created_at, cpt_post_id, email, first_name, last_name, company,
+			sector, region, revenue_band, headcount_band, regulatory_json, data_sensitivity_json,
+			overall_score, cti_score, dm_score, te_score, ctem_score, ctem_skipped, maturity_level,
+			recommendations_json, threat_profile_json, ip
+			FROM {$table}
+			WHERE {$where_sql}
+			ORDER BY {$orderby} {$order}
+			LIMIT %d OFFSET %d";
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( $select_sql, array_merge( $params, array( $per_page, $offset ) ) ),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		return array(
+			'rows'  => $rows ? $rows : array(),
+			'total' => $total,
+		);
+	}
+
 	public static function get_submission( $id ) {
 		global $wpdb;
 		$table = self::get_table_name();
