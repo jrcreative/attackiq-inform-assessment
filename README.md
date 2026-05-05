@@ -104,6 +104,101 @@ This plugin is built using `@wordpress/scripts`, which provides a modern build s
     npm run zip
     ```
 
+## External REST API
+
+External tools (Salesforce sync jobs, BI exports, ad-hoc reporting) can pull submission data from a read-only REST API.
+
+### Authentication
+
+Generate an API key from **Settings > INFORM Assessment > External REST API > Generate New Key**. The plain key is shown exactly once — copy it immediately, only its prefix is recoverable afterwards.
+
+Send the key on every request via the `X-AIQ-Key` header:
+
+```
+X-AIQ-Key: 0b3f…full-key…
+```
+
+(Logged-in admins with `manage_options` may also call these endpoints from the browser without a key.)
+
+### Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/wp-json/aiq/v1/submissions` | Paginated, filterable list. Pagination via `X-WP-Total` / `X-WP-TotalPages` response headers. |
+| `GET` | `/wp-json/aiq/v1/submissions/{id}` | Full record incl. answers, recommendations, and threat profile. |
+
+### List filters (`GET /submissions`)
+
+| Param | Type | Notes |
+| --- | --- | --- |
+| `date_from`, `date_to` | datetime (`YYYY-MM-DD HH:MM:SS`) | Inclusive bounds on `created_at` |
+| `min_score`, `max_score` | float (0-1) | Bounds on overall maturity ratio |
+| `sector` | string | Exact match against the Threat Profile sector value |
+| `email` | string | Substring match (LIKE) |
+| `ctem_skipped` | `0` or `1` | Filter rows where the user opted out of CTEM |
+| `page`, `per_page` | int | Defaults: `1`, `25`. `per_page` capped at `100` |
+| `orderby` | `id`, `created_at`, `overall_score`, `sector`, `email` | Default `created_at` |
+| `order` | `ASC`, `DESC` | Default `DESC` |
+
+### Sample requests
+
+```bash
+# Latest 5 submissions
+curl -H "X-AIQ-Key: $AIQ_KEY" \
+  "https://attackiq.com/wp-json/aiq/v1/submissions?per_page=5"
+
+# Submissions since May 1 with maturity ratio above 0.4
+curl -H "X-AIQ-Key: $AIQ_KEY" \
+  "https://attackiq.com/wp-json/aiq/v1/submissions?date_from=2026-05-01&min_score=0.4"
+
+# Single record with full payload
+curl -H "X-AIQ-Key: $AIQ_KEY" \
+  "https://attackiq.com/wp-json/aiq/v1/submissions/42"
+```
+
+### Sample list response
+
+```json
+[
+  {
+    "id": 42,
+    "created_at": "2026-05-05 16:31:08",
+    "email": "lead@example.com",
+    "first_name": "Jordan",
+    "last_name": "Reyes",
+    "company": "Example Co",
+    "sector": "Financial Services",
+    "region": "North America",
+    "revenue_band": "$100M-$1B",
+    "headcount_band": "1,001-5,000",
+    "regulatory": ["PCI-DSS", "SOX"],
+    "data_sensitivity": ["Payment / Financial Data"],
+    "overall_score": 0.62,
+    "cti_score": 3,
+    "dm_score": 4,
+    "te_score": 2,
+    "ctem_score": 3,
+    "ctem_skipped": false,
+    "maturity_level": 3
+  }
+]
+```
+
+The single-record response includes the same fields plus `answers`, `recommendations`, `threat_profile`, `cpt_post_id`, `ip`, and `user_agent`.
+
+### Errors
+
+| Status | Code | Cause |
+| --- | --- | --- |
+| `401` | `aiq_api_key_missing` | No `X-AIQ-Key` header sent |
+| `401` | `aiq_api_key_not_configured` | Server has no key generated yet |
+| `403` | `aiq_api_key_invalid` | Key did not match the stored hash |
+| `404` | `aiq_submission_not_found` | Single-record id does not exist |
+
+### Rotating the key
+
+Click **Regenerate Key** on the settings page. Existing integrations stop working immediately — re-distribute the new key to any consumers. Use **Revoke Key** to disable the API entirely.
+
 ## File Structure
 
 -   `attackiq-inform-assessment.php`: The main plugin file. Handles initialization, shortcodes, and admin settings.

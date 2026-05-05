@@ -40,6 +40,19 @@ class AIQ_API {
 			'permission_callback' => array( 'AIQ_Auth', 'rest_permission' ),
 		) );
 
+		register_rest_route( 'aiq/v1', '/submissions/(?P<id>\d+)', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_get_submission' ),
+			'permission_callback' => array( 'AIQ_Auth', 'rest_permission' ),
+			'args'                => array(
+				'id' => array(
+					'validate_callback' => function( $value ) {
+						return is_numeric( $value ) && intval( $value ) > 0;
+					},
+				),
+			),
+		) );
+
 		register_rest_route( 'aiq/v1', '/_admin/backfill-batch', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_backfill_batch' ),
@@ -205,6 +218,49 @@ class AIQ_API {
 			'ctem_skipped'   => (bool) $row['ctem_skipped'],
 			'maturity_level' => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
 		);
+	}
+
+	/**
+	 * GET /aiq/v1/submissions/{id} — full record incl. answers and any
+	 * recommendations / threat profile that were captured at submit time.
+	 */
+	public function handle_get_submission( $request ) {
+		$id  = intval( $request['id'] );
+		$row = AIQ_DB::get_submission( $id );
+
+		if ( ! $row ) {
+			return new WP_Error( 'aiq_submission_not_found', 'Submission not found', array( 'status' => 404 ) );
+		}
+
+		$response = array(
+			'id'             => intval( $row['id'] ),
+			'created_at'     => $row['created_at'],
+			'cpt_post_id'    => $row['cpt_post_id'] ? intval( $row['cpt_post_id'] ) : null,
+			'email'          => $row['email'],
+			'first_name'     => $row['first_name'],
+			'last_name'      => $row['last_name'],
+			'company'        => $row['company'],
+			'sector'         => $row['sector'],
+			'region'         => $row['region'],
+			'revenue_band'   => $row['revenue_band'],
+			'headcount_band' => $row['headcount_band'],
+			'regulatory'     => $this->maybe_decode( $row['regulatory_json'] ),
+			'data_sensitivity' => $this->maybe_decode( $row['data_sensitivity_json'] ),
+			'overall_score'  => null !== $row['overall_score'] ? floatval( $row['overall_score'] ) : null,
+			'cti_score'      => null !== $row['cti_score'] ? intval( $row['cti_score'] ) : null,
+			'dm_score'       => null !== $row['dm_score'] ? intval( $row['dm_score'] ) : null,
+			'te_score'       => null !== $row['te_score'] ? intval( $row['te_score'] ) : null,
+			'ctem_score'     => null !== $row['ctem_score'] ? intval( $row['ctem_score'] ) : null,
+			'ctem_skipped'   => (bool) $row['ctem_skipped'],
+			'maturity_level' => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
+			'answers'        => $this->maybe_decode( $row['answers_json'] ),
+			'recommendations' => $this->maybe_decode( $row['recommendations_json'] ),
+			'threat_profile' => $this->maybe_decode( $row['threat_profile_json'] ),
+			'ip'             => $row['ip'],
+			'user_agent'     => $row['user_agent'],
+		);
+
+		return rest_ensure_response( $response );
 	}
 
 	private function maybe_decode( $json ) {
