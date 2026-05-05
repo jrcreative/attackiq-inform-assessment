@@ -6,6 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-db.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-migrate.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-auth.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-submission.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
 
@@ -25,6 +26,28 @@ class AIQ_Inform_Assessment {
 		add_shortcode( 'inform_assessment', array( $this, 'render_shortcode' ) );
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_post_aiq_generate_api_key', array( $this, 'handle_generate_api_key' ) );
+		add_action( 'admin_post_aiq_revoke_api_key', array( $this, 'handle_revoke_api_key' ) );
+	}
+
+	public function handle_generate_api_key() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions', 'attackiq-inform-assessment' ) );
+		}
+		check_admin_referer( 'aiq_generate_api_key' );
+		AIQ_Auth::generate_and_store();
+		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
+		exit;
+	}
+
+	public function handle_revoke_api_key() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions', 'attackiq-inform-assessment' ) );
+		}
+		check_admin_referer( 'aiq_revoke_api_key' );
+		AIQ_Auth::revoke();
+		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
+		exit;
 	}
 
 	public function register_scripts() {
@@ -284,6 +307,48 @@ class AIQ_Inform_Assessment {
 				});
 			})();
 			</script>
+
+			<hr />
+			<h2><?php esc_html_e( 'External REST API', 'attackiq-inform-assessment' ); ?></h2>
+			<p><?php esc_html_e( 'Generate an API key so external tools can pull submission data via the read API. The key is shown once at generation time and stored as a hash — keep it somewhere safe.', 'attackiq-inform-assessment' ); ?></p>
+
+			<?php
+			$flash_key = AIQ_Auth::consume_flash();
+			if ( $flash_key ) :
+				?>
+				<div class="notice notice-success" style="padding:12px;">
+					<p><strong><?php esc_html_e( 'Your new API key (shown once):', 'attackiq-inform-assessment' ); ?></strong></p>
+					<input type="text" readonly value="<?php echo esc_attr( $flash_key ); ?>" style="width:100%;max-width:520px;font-family:monospace;" onclick="this.select();" />
+					<p class="description"><?php esc_html_e( 'Copy this value now. After leaving this page only the prefix is recoverable.', 'attackiq-inform-assessment' ); ?></p>
+				</div>
+				<?php
+			endif;
+			?>
+
+			<table class="widefat striped" style="max-width:520px;margin-bottom:20px;">
+				<tbody>
+					<tr><th><?php esc_html_e( 'Status', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? esc_html__( 'Active', 'attackiq-inform-assessment' ) : esc_html__( 'No key generated', 'attackiq-inform-assessment' ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Key prefix', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? '<code>' . esc_html( AIQ_Auth::get_key_prefix() ) . '…</code>' : '—'; ?></td></tr>
+					<tr><th><?php esc_html_e( 'Created', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? esc_html( AIQ_Auth::get_created_at() ) . ' (UTC)' : '—'; ?></td></tr>
+					<tr><th><?php esc_html_e( 'Auth header', 'attackiq-inform-assessment' ); ?></th><td><code>X-AIQ-Key: &lt;your-key&gt;</code></td></tr>
+				</tbody>
+			</table>
+
+			<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;margin-right:10px;">
+				<input type="hidden" name="action" value="aiq_generate_api_key" />
+				<?php wp_nonce_field( 'aiq_generate_api_key' ); ?>
+				<button type="submit" class="button button-primary">
+					<?php echo AIQ_Auth::has_key() ? esc_html__( 'Regenerate Key', 'attackiq-inform-assessment' ) : esc_html__( 'Generate New Key', 'attackiq-inform-assessment' ); ?>
+				</button>
+			</form>
+
+			<?php if ( AIQ_Auth::has_key() ) : ?>
+				<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;" onsubmit="return confirm('<?php echo esc_js( __( 'Revoke the current API key? Existing integrations will stop working until a new key is issued.', 'attackiq-inform-assessment' ) ); ?>');">
+					<input type="hidden" name="action" value="aiq_revoke_api_key" />
+					<?php wp_nonce_field( 'aiq_revoke_api_key' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Revoke Key', 'attackiq-inform-assessment' ); ?></button>
+				</form>
+			<?php endif; ?>
 
 			<hr />
 			<h2><?php esc_html_e( 'Shortcode Usage', 'attackiq-inform-assessment' ); ?></h2>
