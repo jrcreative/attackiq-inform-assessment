@@ -9,6 +9,8 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-migrate.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-auth.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-submission.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin-list.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin.php';
 
 // Run dbDelta on activation. The maybe_upgrade() call inside init also catches
 // existing live installs whose schema version is missing or stale.
