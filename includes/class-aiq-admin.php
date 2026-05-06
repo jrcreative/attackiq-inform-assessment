@@ -85,7 +85,91 @@ class AIQ_Admin {
 			</form>
 
 			<?php $table->display(); ?>
+
+			<?php $this->render_view_json_modal(); ?>
 		</div>
+		<?php
+	}
+
+	private function render_view_json_modal() {
+		$rest_url = esc_url_raw( rest_url( 'aiq/v1/submissions/' ) );
+		$nonce    = wp_create_nonce( 'wp_rest' );
+		?>
+		<div id="aiq-json-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100000;">
+			<div style="background:#fff;max-width:920px;width:92%;max-height:88vh;margin:4vh auto;border-radius:6px;display:flex;flex-direction:column;overflow:hidden;">
+				<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #ddd;background:#f7f7f7;">
+					<h2 id="aiq-json-modal-title" style="margin:0;font-size:16px;">Submission</h2>
+					<div>
+						<button type="button" class="button" id="aiq-json-modal-copy"><?php esc_html_e( 'Copy JSON', 'attackiq-inform-assessment' ); ?></button>
+						<button type="button" class="button" id="aiq-json-modal-close" style="margin-left:6px;"><?php esc_html_e( 'Close', 'attackiq-inform-assessment' ); ?></button>
+					</div>
+				</div>
+				<div style="padding:14px 18px;overflow:auto;">
+					<div id="aiq-json-modal-summary" style="margin-bottom:12px;font-size:13px;color:#444;"></div>
+					<pre id="aiq-json-modal-body" style="background:#0e1116;color:#e6edf3;padding:14px;border-radius:4px;font-size:12px;line-height:1.5;overflow:auto;max-height:65vh;"></pre>
+				</div>
+			</div>
+		</div>
+		<script>
+		(function(){
+			var modal   = document.getElementById('aiq-json-modal');
+			var title   = document.getElementById('aiq-json-modal-title');
+			var summary = document.getElementById('aiq-json-modal-summary');
+			var body    = document.getElementById('aiq-json-modal-body');
+			var closeBtn = document.getElementById('aiq-json-modal-close');
+			var copyBtn  = document.getElementById('aiq-json-modal-copy');
+
+			var REST_BASE = <?php echo wp_json_encode( $rest_url ); ?>;
+			var NONCE     = <?php echo wp_json_encode( $nonce ); ?>;
+			var current   = null;
+
+			function openModal(){ modal.style.display = 'block'; document.body.style.overflow = 'hidden'; }
+			function closeModal(){ modal.style.display = 'none'; document.body.style.overflow = ''; }
+
+			closeBtn.addEventListener('click', closeModal);
+			modal.addEventListener('click', function(e){ if (e.target === modal) closeModal(); });
+
+			copyBtn.addEventListener('click', function(){
+				if (!current) return;
+				navigator.clipboard.writeText(JSON.stringify(current, null, 2)).then(function(){
+					var orig = copyBtn.textContent;
+					copyBtn.textContent = 'Copied!';
+					setTimeout(function(){ copyBtn.textContent = orig; }, 1500);
+				});
+			});
+
+			document.addEventListener('click', function(e){
+				var link = e.target.closest('.aiq-view-json');
+				if (!link) return;
+				e.preventDefault();
+				var id = link.getAttribute('data-id');
+
+				title.textContent = 'Submission #' + id;
+				summary.textContent = 'Loading…';
+				body.textContent = '';
+				openModal();
+
+				fetch(REST_BASE + id, {
+					credentials: 'same-origin',
+					headers: { 'X-WP-Nonce': NONCE }
+				}).then(function(r){ return r.json(); }).then(function(data){
+					current = data;
+					var parts = [];
+					if (data.email) parts.push('Email: ' + data.email);
+					if (data.company) parts.push('Company: ' + data.company);
+					if (data.sector) parts.push('Sector: ' + data.sector);
+					if (data.overall_score !== null && data.overall_score !== undefined) {
+						parts.push('Overall: ' + Number(data.overall_score).toFixed(2));
+					}
+					if (data.ctem_skipped) parts.push('CTEM: skipped');
+					summary.textContent = parts.join('  ·  ');
+					body.textContent = JSON.stringify(data, null, 2);
+				}).catch(function(err){
+					summary.textContent = 'Failed to load submission: ' + err.message;
+				});
+			});
+		})();
+		</script>
 		<?php
 	}
 
