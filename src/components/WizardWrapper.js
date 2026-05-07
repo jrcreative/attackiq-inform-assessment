@@ -8,6 +8,7 @@ import { generatePDF } from '../utils/pdfGenerator';
 import { generateMitreJSON } from '../utils/jsonGenerator';
 import { submitResults } from '../utils/api';
 import { buildRecommendationGroups } from '../utils/recommendationEngine';
+import HistoricalUpload from './HistoricalUpload';
 import MarketoModal from './MarketoModal';
 
 const BRAND_COLORS = {
@@ -53,6 +54,7 @@ const WizardWrapper = () => {
     const [pendingDownloadType, setPendingDownloadType] = useState(null);
     const [userEmail, setUserEmail] = useState(null);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [historicalResults, setHistoricalResults] = useState([]);
     const wizardHeaderRef = useRef(null);
     const containerRef = useRef(null);
     const isInitialMount = useRef(true);
@@ -727,8 +729,78 @@ const WizardWrapper = () => {
                                 maxWidth: '450px',
                                 margin: '0 auto 30px'
                             }}>
-                                <RadarChart scores={results} />
+                                <RadarChart scores={results} historical={historicalResults} />
                             </div>
+
+                            <HistoricalUpload data={data} onChange={setHistoricalResults} />
+
+                            {historicalResults.length > 0 && (
+                                <div className="aiq-historical-table-wrapper" style={{ marginTop: '20px', overflowX: 'auto' }}>
+                                    <h4 style={{ fontSize: '14px', margin: '0 0 10px 0', color: BRAND_COLORS.navy, fontWeight: '700' }}>
+                                        Score Comparison
+                                    </h4>
+                                    <table style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '12px',
+                                        background: '#fff',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: '4px',
+                                        overflow: 'hidden'
+                                    }}>
+                                        <thead>
+                                            <tr style={{ background: BRAND_COLORS.background }}>
+                                                <th style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'left' }}>Section</th>
+                                                {historicalResults.map((rec, idx) => {
+                                                    const date = rec.downloadedDate ? new Date(rec.downloadedDate) : null;
+                                                    const label = date && !Number.isNaN(date.getTime())
+                                                        ? date.toLocaleDateString()
+                                                        : `Previous ${idx + 1}`;
+                                                    return (
+                                                        <th key={idx} style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'center' }}>
+                                                            {label}
+                                                        </th>
+                                                    );
+                                                })}
+                                                <th style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'center', background: BRAND_COLORS.primary, color: '#fff' }}>Today</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {results.scoresBySection.filter(s => s.scored).map(section => {
+                                                const todaysLevel = calculateSectionScore(section);
+                                                return (
+                                                    <tr key={section.section_id}>
+                                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', fontWeight: '600' }}>
+                                                            {section.shortname || section.section_id}
+                                                        </td>
+                                                        {historicalResults.map((rec, idx) => {
+                                                            const match = (rec.sections || []).find(s => s.section_id === section.section_id);
+                                                            let display = '—';
+                                                            if (match && !match.missing) {
+                                                                if (typeof match.ratio === 'number') {
+                                                                    display = (match.ratio * 5).toFixed(1);
+                                                                } else if (typeof match.totalPoints === 'number' && match.possiblePoints) {
+                                                                    display = ((match.totalPoints / match.possiblePoints) * 5).toFixed(1);
+                                                                } else if (typeof match.totalPoints === 'number') {
+                                                                    display = match.totalPoints;
+                                                                }
+                                                            }
+                                                            return (
+                                                                <td key={idx} style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: display === '—' ? '#bbb' : BRAND_COLORS.text }}>
+                                                                    {display}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', fontWeight: '700', color: BRAND_COLORS.primary }}>
+                                                            {todaysLevel < 0 ? '—' : todaysLevel}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                             <div id="aiq-matrix-container">
                                 <ImpactComplexityMatrix results={results} />
                             </div>
