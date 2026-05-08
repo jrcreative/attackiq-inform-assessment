@@ -3,12 +3,13 @@ import jsPDF from 'jspdf';
 import { getScoreLabel } from './scoring';
 
 const SECTION_COLORS = {
-    CTI: { rgb: [255, 204, 0], textRgb: [0, 0, 0] },
-    DM: { rgb: [54, 186, 228], textRgb: [0, 0, 0] },
-    TE: { rgb: [240, 44, 104], textRgb: [255, 255, 255] }
+    CTI:  { rgb: [255, 204, 0],  textRgb: [0, 0, 0]   },
+    DM:   { rgb: [54, 186, 228], textRgb: [0, 0, 0]   },
+    TE:   { rgb: [240, 44, 104], textRgb: [255, 255, 255] },
+    CTEM: { rgb: [123, 63, 242], textRgb: [255, 255, 255] }
 };
 
-const SECTION_WEIGHTS = { CTI: '35%', DM: '40%', TE: '25%' };
+const SECTION_WEIGHTS = { CTI: '28%', DM: '32%', TE: '20%', CTEM: '20%' };
 
 const getQuestionScore = (q) => {
     if (q.isNotApplicable) return -1;
@@ -26,7 +27,7 @@ const getQuestionScore = (q) => {
 };
 
 export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessment-Report.pdf', scores = {}) => {
-    const { results, overallLevel, overallLabel, calculateSectionScore } = scores;
+    const { results, overallLevel, overallLabel, calculateSectionScore, recommendationGroups = [] } = scores;
 
     if (!results || !results.scoresBySection) {
         console.error('No results data provided for PDF generation');
@@ -350,69 +351,120 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
 
         pdf.addPage();
 
-        pdf.setFillColor(64, 0, 143);
-        pdf.rect(0, 0, pageWidth, 25, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Recommendations & Next Steps', margin, 17);
+        const renderRecsBanner = () => {
+            pdf.setFillColor(64, 0, 143);
+            pdf.rect(0, 0, pageWidth, 25, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Recommendations & Next Steps', margin, 17);
+        };
 
+        renderRecsBanner();
         yPos = 40;
 
-        pdf.setTextColor(14, 8, 43);
-        pdf.setFontSize(12);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Improve Your Threat-Informed Defense', margin, yPos);
-
-        yPos += 10;
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(51, 51, 51);
-
-        const recommendations = [
-            {
-                title: 'Enhance Cyber Threat Intelligence',
-                desc: 'Develop deeper threat intelligence capabilities by incorporating multiple intelligence sources, tracking adversary TTPs, and integrating CTI across security operations.'
-            },
-            {
-                title: 'Strengthen Defensive Measures',
-                desc: 'Implement comprehensive detection rules, improve log collection and analysis, conduct regular threat hunts, and establish robust incident response procedures.'
-            },
-            {
-                title: 'Expand Test & Evaluation',
-                desc: 'Move beyond compliance-focused testing to behavior-based assessments. Conduct regular purple team exercises and validate security controls against real-world attack techniques.'
-            },
-            {
-                title: 'Leverage Automation',
-                desc: 'Implement continuous security validation to automatically test your defenses against the latest threats and attack techniques.'
+        // Footer band reserves vertical space at the bottom of every page so
+        // recommendation cards don't run into the "Page n of N" line.
+        const FOOTER_RESERVE = 25;
+        const ensureRoom = (needed) => {
+            if (yPos + needed > pageHeight - FOOTER_RESERVE) {
+                pdf.addPage();
+                renderRecsBanner();
+                yPos = 40;
             }
-        ];
+        };
 
-        recommendations.forEach((rec, idx) => {
-            pdf.setFillColor(242, 241, 244);
-            pdf.roundedRect(margin, yPos, contentWidth, 28, 2, 2, 'F');
-
-            pdf.setFillColor(64, 0, 143);
-            pdf.circle(margin + 8, yPos + 12, 4, 'F');
-            pdf.setTextColor(255, 255, 255);
-            pdf.setFontSize(10);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(`${idx + 1}`, margin + 8, yPos + 13.5, { align: 'center' });
-
+        if (!recommendationGroups || recommendationGroups.length === 0) {
             pdf.setTextColor(14, 8, 43);
-            pdf.setFontSize(11);
+            pdf.setFontSize(12);
             pdf.setFont('helvetica', 'bold');
-            pdf.text(rec.title, margin + 18, yPos + 12);
-
-            pdf.setTextColor(101, 97, 107);
-            pdf.setFontSize(9);
+            pdf.text('Improve Your Threat-Informed Defense', margin, yPos);
+            yPos += 10;
+            pdf.setFontSize(10);
             pdf.setFont('helvetica', 'normal');
-            addWrappedText(rec.desc, margin + 18, yPos + 18, contentWidth - 25, 4);
+            pdf.setTextColor(101, 97, 107);
+            yPos = addWrappedText(
+                'Complete the assessment to receive tailored recommendations for each component where there is room to mature.',
+                margin, yPos, contentWidth, 5
+            );
+            yPos += 8;
+        } else {
+            pdf.setTextColor(14, 8, 43);
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Improve Your Threat-Informed Defense', margin, yPos);
+            yPos += 10;
 
-            yPos += 34;
-        });
+            recommendationGroups.forEach((group, idx) => {
+                const cb = group.choiceBlock || {};
+                const sectionColor = SECTION_COLORS[group.sectionId] || SECTION_COLORS.CTI;
 
-        yPos += 8;
+                // Header bar
+                ensureRoom(14);
+                pdf.setFillColor.apply(pdf, sectionColor.rgb);
+                pdf.rect(margin, yPos, contentWidth, 9, 'F');
+                pdf.setTextColor.apply(pdf, sectionColor.textRgb);
+                pdf.setFontSize(10);
+                pdf.setFont('helvetica', 'bold');
+                const headerText = `${idx + 1}. ${group.componentLabel || ''}`;
+                pdf.text(
+                    pdf.splitTextToSize(headerText, contentWidth - 6)[0],
+                    margin + 3, yPos + 6
+                );
+                yPos += 11;
+
+                // Body fields — each line is height-checked so a long card
+                // can break across pages cleanly.
+                pdf.setTextColor(14, 8, 43);
+                pdf.setFontSize(9);
+
+                if (cb.selectedLabel) {
+                    ensureRoom(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text('Suggested level:', margin, yPos);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(51, 51, 51);
+                    yPos = addWrappedText(cb.selectedLabel, margin + 32, yPos, contentWidth - 32, 4) + 2;
+                    pdf.setTextColor(14, 8, 43);
+                }
+                if (cb.primaryOwner) {
+                    ensureRoom(8);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text('Primary owner:', margin, yPos);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(101, 97, 107);
+                    yPos = addWrappedText(cb.primaryOwner, margin + 30, yPos, contentWidth - 30, 4) + 2;
+                    pdf.setTextColor(14, 8, 43);
+                }
+                if (cb.levelGoal) {
+                    ensureRoom(10);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(51, 51, 51);
+                    yPos = addWrappedText(cb.levelGoal, margin, yPos, contentWidth, 4.4) + 3;
+                    pdf.setTextColor(14, 8, 43);
+                }
+                if (Array.isArray(cb.recommendations) && cb.recommendations.length > 0) {
+                    ensureRoom(8);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(9);
+                    pdf.text('Next Steps', margin, yPos);
+                    yPos += 5;
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(51, 51, 51);
+                    cb.recommendations.forEach((line) => {
+                        ensureRoom(8);
+                        pdf.text('•', margin + 2, yPos);
+                        yPos = addWrappedText(line, margin + 7, yPos, contentWidth - 7, 4.4) + 1.5;
+                    });
+                    pdf.setTextColor(14, 8, 43);
+                }
+
+                yPos += 6;
+            });
+        }
+
+        // CTA banner — fixed height; if it doesn't fit, paginate.
+        ensureRoom(48);
         pdf.setFillColor(14, 8, 43);
         pdf.roundedRect(margin, yPos, contentWidth, 40, 3, 3, 'F');
 

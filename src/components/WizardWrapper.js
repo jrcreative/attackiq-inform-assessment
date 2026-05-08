@@ -221,14 +221,15 @@ const WizardWrapper = () => {
                 results,
                 overallLevel: overallScoreLevel,
                 overallLabel: overallScoreLabel,
-                calculateSectionScore
+                calculateSectionScore,
+                recommendationGroups,
             });
         } catch (err) {
             console.error('PDF generation error:', err);
         }
         setIsGenerating(false);
         setShowDownloadMenu(false);
-    }, [results, overallScoreLevel, overallScoreLabel]);
+    }, [results, overallScoreLevel, overallScoreLabel, recommendationGroups]);
 
     const downloadJSON = useCallback(() => {
         if (!results || !data) return;
