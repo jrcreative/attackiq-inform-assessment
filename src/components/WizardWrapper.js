@@ -217,6 +217,7 @@ const WizardWrapper = () => {
                 overallLabel: overallScoreLabel,
                 calculateSectionScore,
                 recommendationGroups,
+                threatProfile: buildThreatProfile(data, answers),
             });
         } catch (err) {
             console.error('PDF generation error:', err);

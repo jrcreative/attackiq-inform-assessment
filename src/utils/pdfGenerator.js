@@ -26,8 +26,17 @@ const getQuestionScore = (q) => {
     return 5;
 };
 
+const TP_FIELD_BY_QID = {
+    'TP.1': 'sector',
+    'TP.2': 'region',
+    'TP.3': 'revenueBand',
+    'TP.4': 'headcountBand',
+    'TP.5': 'regulatory',
+    'TP.6': 'dataSensitivity',
+};
+
 export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessment-Report.pdf', scores = {}) => {
-    const { results, overallLevel, overallLabel, calculateSectionScore, recommendationGroups = [] } = scores;
+    const { results, overallLevel, overallLabel, calculateSectionScore, recommendationGroups = [], threatProfile = {} } = scores;
 
     if (!results || !results.scoresBySection) {
         console.error('No results data provided for PDF generation');
@@ -95,13 +104,13 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         pdf.text(`Generated: ${today}`, margin, 55);
 
         pdf.setTextColor(14, 8, 43);
-        pdf.setFontSize(24);
+        pdf.setFontSize(18);
         pdf.setFont('helvetica', 'bold');
         pdf.text('Your Assessment Results', margin, 95);
 
         pdf.setDrawColor(64, 0, 143);
-        pdf.setLineWidth(1);
-        pdf.line(margin, 100, margin + 60, 100);
+        pdf.setLineWidth(0.8);
+        pdf.line(margin, 99, margin + 80, 99);
 
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
@@ -130,21 +139,24 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         pdf.text(overallLabel || 'Overall Score', pageWidth - margin - 30, yPos + 26, { align: 'center' });
 
         const sectionScoreY = yPos + 35;
-        const sectionWidth = (contentWidth - 20) / 3;
+        const badgeSections = results.scoresBySection.filter(s => s.section_id !== 'TP');
+        const badgeGap = 4;
+        const badgeRowWidth = contentWidth - 20;
+        const badgeWidth = (badgeRowWidth - badgeGap * (badgeSections.length - 1)) / badgeSections.length;
 
-        results.scoresBySection.forEach((section, idx) => {
+        badgeSections.forEach((section, idx) => {
             const colors = SECTION_COLORS[section.section_id] || SECTION_COLORS.CTI;
             const sScore = calculateSectionScore ? calculateSectionScore(section) : 0;
-            const xPos = margin + 10 + (idx * sectionWidth);
+            const xPos = margin + 10 + (idx * (badgeWidth + badgeGap));
 
             pdf.setFillColor(...colors.rgb);
-            pdf.roundedRect(xPos, sectionScoreY, sectionWidth - 10, 10, 1, 1, 'F');
+            pdf.roundedRect(xPos, sectionScoreY, badgeWidth, 10, 1, 1, 'F');
 
             pdf.setFontSize(9);
             pdf.setFont('helvetica', 'bold');
             pdf.setTextColor(...colors.textRgb);
             const scoreLabel = sScore === -1 ? 'N/A' : String(sScore);
-            pdf.text(`${section.section_id}: ${scoreLabel}`, xPos + (sectionWidth - 10) / 2, sectionScoreY + 7, { align: 'center' });
+            pdf.text(`${section.section_id}: ${scoreLabel}`, xPos + badgeWidth / 2, sectionScoreY + 7, { align: 'center' });
         });
 
         yPos = 225;
@@ -197,7 +209,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         yPos = 40;
 
         results.scoresBySection.forEach((section) => {
-            const colors = SECTION_COLORS[section.section_id] || SECTION_COLORS.CTI;
+            const colors = SECTION_COLORS[section.section_id] || { rgb: [123, 63, 242], textRgb: [255, 255, 255] };
             const sScore = calculateSectionScore ? calculateSectionScore(section) : 0;
             const scoreLabel = sScore === -1 ? 'N/A' : String(sScore);
 
@@ -206,19 +218,60 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
                 yPos = 20;
             }
 
+            if (section.section_id === 'TP') {
+                pdf.setFillColor(...colors.rgb);
+                pdf.roundedRect(margin, yPos, contentWidth, 12, 2, 2, 'F');
+                pdf.setTextColor(...colors.textRgb);
+                pdf.setFontSize(11);
+                pdf.setFont('helvetica', 'bold');
+                const tpTitleLine = pdf.splitTextToSize(`${section.section_id} - ${section.name}`, contentWidth - 10)[0];
+                pdf.text(tpTitleLine, margin + 5, yPos + 8);
+                yPos += 18;
+
+                if (section.questions) {
+                    section.questions.forEach((q) => {
+                        if (yPos > pageHeight - 25) {
+                            pdf.addPage();
+                            yPos = 20;
+                        }
+                        const field = TP_FIELD_BY_QID[q.uid];
+                        const raw = field ? threatProfile[field] : null;
+                        const valueText = Array.isArray(raw)
+                            ? (raw.length ? raw.join(', ') : '—')
+                            : (raw || '—');
+
+                        pdf.setFontSize(9);
+                        pdf.setFont('helvetica', 'normal');
+                        pdf.setTextColor(101, 97, 107);
+                        pdf.text(`${q.uid} - ${q.heading}`, margin + 5, yPos);
+
+                        pdf.setFont('helvetica', 'bold');
+                        pdf.setTextColor(14, 8, 43);
+                        const valueLine = pdf.splitTextToSize(valueText, 80)[0];
+                        pdf.text(valueLine, pageWidth - margin - 5, yPos, { align: 'right' });
+
+                        yPos += 6;
+                    });
+                }
+                yPos += 10;
+                return;
+            }
+
             pdf.setFillColor(...colors.rgb);
             pdf.roundedRect(margin, yPos, contentWidth, 12, 2, 2, 'F');
-
             pdf.setTextColor(...colors.textRgb);
+
+            const scoreText = `Score: ${scoreLabel}  |  Weight: ${SECTION_WEIGHTS[section.section_id] || ''}`;
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            const scoreWidth = pdf.getTextWidth(scoreText);
+            pdf.text(scoreText, pageWidth - margin - 5, yPos + 8, { align: 'right' });
+
             pdf.setFontSize(11);
             pdf.setFont('helvetica', 'bold');
-            pdf.text(`${section.section_id} - ${section.name}`, margin + 5, yPos + 8);
-
-            pdf.setFontSize(9);
-            pdf.text(
-                `Score: ${scoreLabel}  |  Weight: ${SECTION_WEIGHTS[section.section_id] || ''}`,
-                pageWidth - margin - 5, yPos + 8, { align: 'right' }
-            );
+            const titleMaxWidth = contentWidth - 10 - scoreWidth - 6;
+            const titleLine = pdf.splitTextToSize(`${section.section_id} - ${section.name}`, titleMaxWidth)[0];
+            pdf.text(titleLine, margin + 5, yPos + 8);
 
             yPos += 18;
 
@@ -392,11 +445,32 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
             pdf.text('Improve Your Threat-Informed Defense', margin, yPos);
             yPos += 10;
 
+            const measureCardHeight = (cb) => {
+                let h = 14;
+                if (cb.selectedLabel) {
+                    h += pdf.splitTextToSize(cb.selectedLabel, contentWidth - 32).length * 4 + 2;
+                }
+                if (cb.primaryOwner) {
+                    h += pdf.splitTextToSize(cb.primaryOwner, contentWidth - 30).length * 4 + 2;
+                }
+                if (cb.levelGoal) {
+                    h += pdf.splitTextToSize(cb.levelGoal, contentWidth).length * 4.4 + 3;
+                }
+                if (Array.isArray(cb.recommendations) && cb.recommendations.length > 0) {
+                    h += 5;
+                    cb.recommendations.forEach((line) => {
+                        h += pdf.splitTextToSize(line, contentWidth - 7).length * 4.4 + 1.5;
+                    });
+                }
+                return h + 6;
+            };
+
             recommendationGroups.forEach((group, idx) => {
                 const cb = group.choiceBlock || {};
                 const sectionColor = SECTION_COLORS[group.sectionId] || SECTION_COLORS.CTI;
 
-                ensureRoom(14);
+                const cardHeight = measureCardHeight(cb);
+                ensureRoom(Math.min(cardHeight, pageHeight - 65));
                 pdf.setFillColor.apply(pdf, sectionColor.rgb);
                 pdf.rect(margin, yPos, contentWidth, 9, 'F');
                 pdf.setTextColor.apply(pdf, sectionColor.textRgb);
@@ -407,7 +481,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
                     pdf.splitTextToSize(headerText, contentWidth - 6)[0],
                     margin + 3, yPos + 6
                 );
-                yPos += 11;
+                yPos += 14;
 
                 pdf.setTextColor(14, 8, 43);
                 pdf.setFontSize(9);
