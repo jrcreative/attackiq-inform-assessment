@@ -484,7 +484,7 @@ const WizardWrapper = () => {
 
                                 return (
                                     <div key={section.section_id} style={{ marginBottom: '15px' }}>
-                                        <div style={{
+                                        <div className={`aiq-section-${(section.section_id || '').toLowerCase()}`} style={{
                                             background: visuals.bg,
                                             color: visuals.text,
                                             padding: '8px 14px',
