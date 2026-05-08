@@ -199,6 +199,42 @@ The single-record response includes the same fields plus `answers`, `recommendat
 
 Click **Regenerate Key** on the settings page. Existing integrations stop working immediately — re-distribute the new key to any consumers. Use **Revoke Key** to disable the API entirely.
 
+## Marketo Hidden Fields
+
+The plugin posts the assessment payload into Marketo form **2844** (configurable from the settings page) by populating hidden fields on submit. Your Marketo admin needs to add the fields below to that form so the values arrive in your instance and pass through to Salesforce.
+
+All multi-select values (Threat Profile regulatory frameworks, data sensitivity classes) are joined with `; ` so Marketo and Salesforce see plain text rather than JSON arrays.
+
+### Existing fields (pre-Phase 2)
+
+| Marketo API name | Source value |
+| --- | --- |
+| `INFORM_Security_Assessment__c` | Full assessment JSON payload (stringified) |
+| `INFORM_Overall_Score__c` | Overall maturity level (0-5) |
+| `INFORM_Maturity_Level__c` | Maturity label (`Initial`, `Developing`, …) |
+| `INFORM_CTI_Score__c` | CTI section maturity level (0-5) |
+| `INFORM_DM_Score__c` | Defensive Measures maturity level (0-5) |
+| `INFORM_TE_Score__c` | Test & Evaluation maturity level (0-5) |
+| `INFORM_Assessment_Date__c` | ISO timestamp of submission |
+| `INFORM_Download_Type__c` | `PDF` or `JSON` |
+| `INFORM_Assessment_Completed__c` | `true` |
+
+### New fields for Phase 2
+
+| Marketo API name | Source value |
+| --- | --- |
+| `INFORM_CTEM_Score__c` | CTEM section maturity level (0-5). Empty when the user enabled **Skip CTEM Assessment**. |
+| `INFORM_TP_Sector__c` | Threat Profile · primary industry (e.g. `Financial Services`) |
+| `INFORM_TP_Region__c` | Threat Profile · primary operating region |
+| `INFORM_TP_Revenue__c` | Threat Profile · annual revenue band |
+| `INFORM_TP_Headcount__c` | Threat Profile · employee headcount band |
+| `INFORM_TP_Regulatory__c` | Threat Profile · regulatory frameworks (multi-select, joined with `; `) |
+| `INFORM_TP_DataSensitivity__c` | Threat Profile · data classes held (multi-select, joined with `; `) |
+
+### What happens if a field is missing
+
+`form.setValues()` silently ignores any hidden field that doesn't yet exist on the Marketo form, so an out-of-sync admin form never breaks the user-facing submit flow. Field names are case-sensitive and must match exactly.
+
 ## File Structure
 
 -   `attackiq-inform-assessment.php`: The main plugin file. Handles initialization, shortcodes, and admin settings.
