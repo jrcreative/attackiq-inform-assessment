@@ -27,7 +27,7 @@ const lookupChoiceText = (tpSection, qid, idx) => {
     return choice ? (choice.text || choice.description || null) : null;
 };
 
-const buildThreatProfile = (data, answers) => {
+export const buildThreatProfile = (data, answers) => {
     const tpSection = findTpSection(data);
     if (!tpSection) return {};
 

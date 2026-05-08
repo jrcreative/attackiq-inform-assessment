@@ -56,6 +56,12 @@ const MarketoModal = ({
                                 setIsLoading(false);
 
                                 if (assessmentData) {
+                                    const tp = assessmentData.threatProfile || {};
+                                    // Multi-select Threat Profile fields land in Marketo as
+                                    // semicolon-joined strings so Salesforce sees plain text
+                                    // rather than a JSON array.
+                                    const joinList = (v) => Array.isArray(v) ? v.join('; ') : (v || '');
+
                                     const hiddenValues = {
                                         INFORM_Security_Assessment__c: assessmentData.jsonData
                                             ? JSON.stringify(assessmentData.jsonData)
@@ -65,6 +71,15 @@ const MarketoModal = ({
                                         INFORM_CTI_Score__c: assessmentData.ctiScore || '',
                                         INFORM_DM_Score__c: assessmentData.dmScore || '',
                                         INFORM_TE_Score__c: assessmentData.teScore || '',
+
+                                        // Phase 2 — new hidden fields client team added to form 2844.
+                                        INFORM_CTEM_Score__c: assessmentData.ctemScore == null ? '' : assessmentData.ctemScore,
+                                        INFORM_TP_Sector__c:           tp.sector         || '',
+                                        INFORM_TP_Region__c:           tp.region         || '',
+                                        INFORM_TP_Revenue__c:          tp.revenueBand    || '',
+                                        INFORM_TP_Headcount__c:        tp.headcountBand  || '',
+                                        INFORM_TP_Regulatory__c:       joinList(tp.regulatory),
+                                        INFORM_TP_DataSensitivity__c:  joinList(tp.dataSensitivity),
 
                                         INFORM_Assessment_Date__c: assessmentData.assessmentDate || new Date().toISOString(),
                                         INFORM_Download_Type__c: downloadType,

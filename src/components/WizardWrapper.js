@@ -6,7 +6,7 @@ import RadarChart from './RadarChart';
 import ImpactComplexityMatrix from './ImpactComplexityMatrix';
 import { generatePDF } from '../utils/pdfGenerator';
 import { generateMitreJSON } from '../utils/jsonGenerator';
-import { submitResults } from '../utils/api';
+import { submitResults, buildThreatProfile } from '../utils/api';
 import { buildRecommendationGroups } from '../utils/recommendationEngine';
 import HistoricalUpload from './HistoricalUpload';
 import MarketoModal from './MarketoModal';
@@ -981,6 +981,7 @@ const WizardWrapper = () => {
                             : 0
                     ),
                     ctemSkipped,
+                    threatProfile: buildThreatProfile(data, answers),
                     jsonData: generateMitreJSON(data, answers, { ctemSkipped }),
                     assessmentDate: new Date().toISOString(),
                     leadSource: 'INFORM Assessment - AttackIQ Website'
