@@ -290,6 +290,7 @@ const WizardWrapper = () => {
             <div
                 className="aiq-ctem-skip-banner"
                 style={{
+                    gridColumn: '1 / -1',
                     marginBottom: '24px',
                     padding: '16px 18px',
                     background: ctemSkipped ? '#f5f5f5' : '#f8f5fc',
@@ -318,6 +319,7 @@ const WizardWrapper = () => {
     const renderCtemSkippedNote = () => (
         <div
             style={{
+                gridColumn: '1 / -1',
                 padding: '32px',
                 background: '#f8f8f8',
                 border: '1px dashed #ccc',
