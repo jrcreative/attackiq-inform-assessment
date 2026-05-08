@@ -1,10 +1,4 @@
 <?php
-/**
- * Phase 2 — Admin shell for the Submissions list UI, CSV export, and the
- * per-row View JSON modal. Reuses AIQ_DB::query_submissions() for filtering
- * and the Day 4 GET /aiq/v1/submissions/{id} endpoint (admin bypass) for
- * the modal's payload.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -194,9 +188,7 @@ class AIQ_Admin {
 		check_admin_referer( 'aiq_export_csv' );
 
 		$args = AIQ_Admin_List_Table::filters_from_request( $_GET );
-		// Bypass list pagination for the export — pull a single big batch.
-		// query_submissions caps per_page at 100; we paginate server-side
-		// here to handle larger result sets without hitting that cap.
+
 		$args['per_page'] = 100;
 
 		nocache_headers();
@@ -204,7 +196,7 @@ class AIQ_Admin {
 		header( 'Content-Disposition: attachment; filename="aiq-inform-submissions-' . date( 'Ymd-His' ) . '.csv"' );
 
 		$out = fopen( 'php://output', 'w' );
-		// UTF-8 BOM so Excel renders unicode (sectors, regulatory frameworks) correctly.
+
 		fwrite( $out, "\xEF\xBB\xBF" );
 
 		$columns = array(
@@ -265,7 +257,7 @@ class AIQ_Admin {
 	private static function distinct_sectors() {
 		global $wpdb;
 		$tbl = AIQ_DB::get_table_name();
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 		$rows = $wpdb->get_col( "SELECT DISTINCT sector FROM {$tbl} WHERE sector IS NOT NULL AND sector != '' ORDER BY sector ASC" );
 		return is_array( $rows ) ? $rows : array();
 	}

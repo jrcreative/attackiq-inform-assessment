@@ -1,6 +1,5 @@
-// Section IDs that contribute to the weighted maturity score.
-// Threat Profile (TP) is captured for context but never scored.
-// CTEM contributes when not skipped via the "Skip CTEM Assessment" toggle.
+
+
 const SCORED_SECTION_IDS = ['CTI', 'DM', 'TE', 'CTEM'];
 
 const isSectionLike = (entry) => Boolean(entry && entry.section_id && Array.isArray(entry.questions));
@@ -235,10 +234,6 @@ export const processResults = (data, userAnswers, options = {}) => {
         });
     });
 
-    // Overall score = weighted average of scored sections, normalized so the
-    // active weights sum to 1. This means skipping CTEM (or any future
-    // section) redistributes the remaining weights proportionally rather
-    // than penalizing the score.
     let overallScore = 0;
     let weightSum = 0;
 

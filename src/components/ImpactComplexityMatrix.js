@@ -182,7 +182,7 @@ const ImpactComplexityMatrix = ({ results }) => {
                 }
                 /* Quadrant Colors (Optional) */
                 .cell-i3-c1 { background: rgba(255, 77, 77, 0.1); } /* High Impact, Low Complexity (Quick Wins) */
-                
+
                 .aiq-matrix-item {
                     font-size: 11px;
                     background: #eee;

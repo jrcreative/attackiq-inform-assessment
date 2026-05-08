@@ -1,13 +1,4 @@
 <?php
-/**
- * Phase 2 — Submissions database layer.
- *
- * Replaces post-meta storage on the legacy aiq_submission CPT with a
- * dedicated wp_aiq_submissions table that is cheap to query, sort, and
- * filter from the wp-admin list UI (Day 5) and the external REST API
- * (Day 4). The CPT continues to receive writes during the transition; this
- * class adds the structured table alongside it.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -15,11 +6,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class AIQ_DB {
 
-	/**
-	 * Schema version. Bump when changing column shape so the upgrade hook
-	 * can re-run dbDelta on existing installs without a manual deactivate /
-	 * reactivate.
-	 */
 	const SCHEMA_VERSION = '1.0.0';
 
 	const VERSION_OPTION_KEY = 'aiq_db_schema_version';
@@ -30,10 +16,6 @@ class AIQ_DB {
 		return $wpdb->prefix . 'aiq_submissions';
 	}
 
-	/**
-	 * Run on plugin activation and on every plugin load when the stored
-	 * schema version differs from SCHEMA_VERSION.
-	 */
 	public static function install() {
 		global $wpdb;
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -80,10 +62,6 @@ class AIQ_DB {
 		update_option( self::VERSION_OPTION_KEY, self::SCHEMA_VERSION );
 	}
 
-	/**
-	 * Called on every page load. If the stored version is missing or
-	 * doesn't match, re-run install(). Cheap on the happy path.
-	 */
 	public static function maybe_upgrade() {
 		$installed = get_option( self::VERSION_OPTION_KEY );
 		if ( $installed !== self::SCHEMA_VERSION ) {
@@ -91,13 +69,6 @@ class AIQ_DB {
 		}
 	}
 
-	/**
-	 * Insert a fully-prepared submission row.
-	 *
-	 * Returns the new row id on success, or WP_Error on failure. The CPT
-	 * write upstream is independent — failures here are logged but do not
-	 * break the user-facing submit flow.
-	 */
 	public static function insert_submission( array $data ) {
 		global $wpdb;
 
@@ -140,19 +111,8 @@ class AIQ_DB {
 		return (int) $wpdb->insert_id;
 	}
 
-	/**
-	 * Whitelisted columns the external API is allowed to sort on. Anything
-	 * else falls back to created_at DESC.
-	 */
 	const ALLOWED_ORDERBY = array( 'id', 'created_at', 'overall_score', 'sector', 'email' );
 
-	/**
-	 * Run a filtered query against wp_aiq_submissions.
-	 *
-	 * Returns ['rows' => array, 'total' => int]. Caller is responsible for
-	 * authorization — this method is shared by the external API and the
-	 * upcoming wp-admin list UI.
-	 */
 	public static function query_submissions( array $args = array() ) {
 		global $wpdb;
 		$table = self::get_table_name();
@@ -213,7 +173,6 @@ class AIQ_DB {
 
 		$where_sql = implode( ' AND ', $where );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$count_sql = "SELECT COUNT(*) FROM {$table} WHERE {$where_sql}";
 		$total = empty( $params )
 			? (int) $wpdb->get_var( $count_sql )
@@ -232,7 +191,6 @@ class AIQ_DB {
 			$wpdb->prepare( $select_sql, array_merge( $params, array( $per_page, $offset ) ) ),
 			ARRAY_A
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return array(
 			'rows'  => $rows ? $rows : array(),
@@ -244,22 +202,21 @@ class AIQ_DB {
 		global $wpdb;
 		$table = self::get_table_name();
 		$id    = intval( $id );
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ), ARRAY_A );
 	}
 
 	public static function count_rows() {
 		global $wpdb;
 		$table = self::get_table_name();
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
 		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
 	}
 
 	public static function count_cpt_posts() {
-		// Counts legacy CPT records regardless of post_status so backfill
-		// numbers match what's actually in the CPT.
+
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+
 		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'aiq_submission'" );
 	}
 
@@ -267,7 +224,7 @@ class AIQ_DB {
 		global $wpdb;
 		$table   = self::get_table_name();
 		$post_id = intval( $post_id );
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 		return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE cpt_post_id = %d LIMIT 1", $post_id ) );
 	}
 
@@ -282,7 +239,7 @@ class AIQ_DB {
 			'message' => $message,
 			'context' => $context,
 		);
-		// Keep only the last 50 entries so the option stays small.
+
 		if ( count( $existing ) > 50 ) {
 			$existing = array_slice( $existing, -50 );
 		}

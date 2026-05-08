@@ -1,11 +1,4 @@
 <?php
-/**
- * Phase 2 — wp-admin Submissions list table.
- *
- * Standard WP_List_Table extension. The data layer (filters, paging, sort)
- * is delegated entirely to AIQ_DB::query_submissions() so the same contract
- * powers both this UI and the external REST API.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -66,11 +59,6 @@ class AIQ_Admin_List_Table extends WP_List_Table {
 		) );
 	}
 
-	/**
-	 * Read filter values from a request array (typically $_GET) and
-	 * normalize them into the AIQ_DB::query_submissions() shape.
-	 * Public so the CSV exporter can reuse the exact same parsing.
-	 */
 	public static function filters_from_request( $request ) {
 		$ctem = isset( $request['ctem_skipped'] ) && '' !== $request['ctem_skipped']
 			? (bool) intval( $request['ctem_skipped'] )

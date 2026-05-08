@@ -1,18 +1,9 @@
-// Phase 2 — historical results comparison.
-//
-// Parses one or more uploaded JSON exports (current and legacy v1 shapes)
-// into a single normalized array the Results page and radar chart can read.
-// Mirrors the upstream aiq-inform-tool handleFileChange logic but lifts it
-// into a pure helper so it's testable and the React component stays thin.
+
 
 const MAX_FILES = 4;
 
 const SECTION_FALLBACK_ORDER = ['CTI', 'DM', 'TE', 'CTEM', 'TP'];
 
-/**
- * Best-effort guess at the section_id when the legacy v1 format only carries
- * a friendly section name.
- */
 const inferSectionId = (sectionName) => {
     if (!sectionName) return null;
     const n = String(sectionName).toLowerCase();
@@ -24,7 +15,6 @@ const inferSectionId = (sectionName) => {
     return null;
 };
 
-/** Normalize a section snapshot regardless of source schema. */
 const normalizeSection = (section, fallbackId) => {
     if (!section || typeof section !== 'object') return null;
     const sectionId =
@@ -50,11 +40,6 @@ const normalizeSection = (section, fallbackId) => {
     };
 };
 
-/**
- * Convert the legacy v1 export shape (`{savedDate, results: {...}}`) into the
- * canonical `{downloadedDate, sections: [...]}` envelope. Sections that
- * predate CTEM / TP get null scores rather than zeros so they render as N/A.
- */
 const fromV1 = (raw) => {
     const out = {
         downloadedDate: raw.savedDate || raw.downloadedDate || null,
@@ -95,10 +80,6 @@ const fromV1 = (raw) => {
     return out;
 };
 
-/**
- * Pad missing sections with placeholder rows so the comparison table aligns
- * across older uploads and the current (5-section) result shape.
- */
 const padSections = (sections, expectedSectionIds) => {
     const present = new Set(sections.map(s => s.section_id).filter(Boolean));
     const padded  = sections.slice();
@@ -119,10 +100,6 @@ const padSections = (sections, expectedSectionIds) => {
     return padded;
 };
 
-/**
- * Parse one uploaded JSON file string into a normalized historical record.
- * Returns null when the file cannot be read.
- */
 export const parseHistoricalFile = (jsonText, expectedSectionIds = SECTION_FALLBACK_ORDER) => {
     let raw;
     try {
@@ -157,17 +134,11 @@ export const parseHistoricalFile = (jsonText, expectedSectionIds = SECTION_FALLB
         downloadedDate: envelope.downloadedDate,
         ctemSkipped: Boolean(raw.ctemSkipped),
         sections: padded,
-        // True when the upload was missing one or more sections that the
-        // current assessment shape includes — surfaces the "missing data
-        // appears as N/A" notice in the UI.
+
         compatNote: padded.some(s => s.missing),
     };
 };
 
-/**
- * Returns the canonical scored section ids in the order the current data
- * file declares them, so older uploads can be padded against today's shape.
- */
 export const expectedSectionIds = (data) => {
     if (!Array.isArray(data)) return SECTION_FALLBACK_ORDER.filter(id => id !== 'TP');
     return data

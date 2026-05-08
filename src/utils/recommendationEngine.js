@@ -1,13 +1,4 @@
-// Phase 2 — recommendation engine.
-//
-// Walks the user's assessment answers, asks matrixSuggestions where the next
-// improvement step lies for each scored question, looks up the rec content
-// (primaryOwner / levelGoal / recommendations[]) on that suggested choice,
-// and returns the top N groups ranked by Impact / Complexity (high impact,
-// low complexity first — the upper-left corner of the matrix).
-//
-// Mirrors `buildPdfRecommendationGroups` in aiq-inform-tool's ResultsPage.vue
-// so the on-screen, PDF, and DB-stored recs all use the same selection logic.
+
 
 import { getMatrixSuggestionChoiceIndices } from './matrixSuggestions';
 
@@ -36,8 +27,6 @@ const buildChoiceBlock = (choice) => ({
         : [],
 });
 
-// Rank cells of the 3x3 matrix in the same order they read top-left → bottom-right
-// when impact decreases down the grid (3 = High Impact at top).
 const matrixCellRank = (impact, complexity) => {
     const order = [];
     for (let row = 1; row <= 3; row++) {
@@ -49,32 +38,12 @@ const matrixCellRank = (impact, complexity) => {
     return idx >= 0 ? idx : 999;
 };
 
-/**
- * Read the recommendation limit from the Results metadata block of the data
- * file. Falls back to DEFAULT_LIMIT when the block isn't present.
- */
 export const getRecommendationLimit = (data) => {
     if (!Array.isArray(data)) return DEFAULT_LIMIT;
     const resultsMeta = data.find(s => s && s.shortname === 'Results' && typeof s.recommendationLimit === 'number');
     return resultsMeta ? resultsMeta.recommendationLimit : DEFAULT_LIMIT;
 };
 
-/**
- * Build the ranked recommendation groups for a completed assessment.
- *
- * @param {Array}   data        - the full data file (sections + questions)
- * @param {Object}  answers     - userAnswers map (componentKey → indices | 'N/A')
- * @param {Object}  options
- * @param {boolean} options.ctemSkipped - true when user opted out of CTEM
- * @param {number}  options.limit       - override the recommendation limit
- * @returns {Array<{
- *   componentLabel: string,
- *   sectionId:      string,
- *   impact:         number,
- *   complexity:     number,
- *   choiceBlock:    object,
- * }>}
- */
 export const buildRecommendationGroups = (data, answers, options = {}) => {
     if (!Array.isArray(data) || !answers) return [];
     const ctemSkipped = Boolean(options.ctemSkipped);

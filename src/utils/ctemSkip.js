@@ -1,6 +1,5 @@
-// localStorage key: when "1", user explicitly opted out of the CTEM assessment.
-// Mirrors the upstream aiq-inform-tool helper so that JSON exports / uploads
-// behave identically across both implementations.
+
+
 export const CTEM_SKIP_STORAGE_KEY = 'inform_ctem_skip';
 
 const isStorageAvailable = () => {
@@ -29,6 +28,6 @@ export function writeCtemExplicitSkip(skipped) {
             window.localStorage.removeItem(CTEM_SKIP_STORAGE_KEY);
         }
     } catch (err) {
-        // ignore quota / privacy-mode errors
+
     }
 }

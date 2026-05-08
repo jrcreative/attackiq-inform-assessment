@@ -57,9 +57,7 @@ const MarketoModal = ({
 
                                 if (assessmentData) {
                                     const tp = assessmentData.threatProfile || {};
-                                    // Multi-select Threat Profile fields land in Marketo as
-                                    // semicolon-joined strings so Salesforce sees plain text
-                                    // rather than a JSON array.
+
                                     const joinList = (v) => Array.isArray(v) ? v.join('; ') : (v || '');
 
                                     const hiddenValues = {
@@ -72,7 +70,6 @@ const MarketoModal = ({
                                         INFORM_DM_Score__c: assessmentData.dmScore || '',
                                         INFORM_TE_Score__c: assessmentData.teScore || '',
 
-                                        // Phase 2 — new hidden fields client team added to form 2844.
                                         INFORM_CTEM_Score__c: assessmentData.ctemScore == null ? '' : assessmentData.ctemScore,
                                         INFORM_TP_Sector__c:           tp.sector         || '',
                                         INFORM_TP_Region__c:           tp.region         || '',

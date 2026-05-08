@@ -49,8 +49,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
             return y + (lines.length * lineHeight);
         };
 
-
-        pdf.setFillColor(14, 8, 43); 
+        pdf.setFillColor(14, 8, 43);
         pdf.rect(0, 0, pageWidth, 70, 'F');
 
         pdf.setTextColor(255, 255, 255);
@@ -68,7 +67,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
             });
 
             const logoCanvas = document.createElement('canvas');
-            const logoWidth = 50; 
+            const logoWidth = 50;
             const aspectRatio = logoImg.naturalHeight / logoImg.naturalWidth;
             const logoHeight = logoWidth * aspectRatio;
             logoCanvas.width = logoImg.naturalWidth * 2;
@@ -363,8 +362,6 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         renderRecsBanner();
         yPos = 40;
 
-        // Footer band reserves vertical space at the bottom of every page so
-        // recommendation cards don't run into the "Page n of N" line.
         const FOOTER_RESERVE = 25;
         const ensureRoom = (needed) => {
             if (yPos + needed > pageHeight - FOOTER_RESERVE) {
@@ -399,7 +396,6 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
                 const cb = group.choiceBlock || {};
                 const sectionColor = SECTION_COLORS[group.sectionId] || SECTION_COLORS.CTI;
 
-                // Header bar
                 ensureRoom(14);
                 pdf.setFillColor.apply(pdf, sectionColor.rgb);
                 pdf.rect(margin, yPos, contentWidth, 9, 'F');
@@ -413,8 +409,6 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
                 );
                 yPos += 11;
 
-                // Body fields — each line is height-checked so a long card
-                // can break across pages cleanly.
                 pdf.setTextColor(14, 8, 43);
                 pdf.setFontSize(9);
 
@@ -463,7 +457,6 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
             });
         }
 
-        // CTA banner — fixed height; if it doesn't fit, paginate.
         ensureRoom(48);
         pdf.setFillColor(14, 8, 43);
         pdf.roundedRect(margin, yPos, contentWidth, 40, 3, 3, 'F');

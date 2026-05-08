@@ -1,14 +1,4 @@
 <?php
-/**
- * Phase 2 — One-time CPT → wp_aiq_submissions backfill.
- *
- * Idempotent and batchable so the admin button can be re-clicked safely
- * (resumes where it left off) and so a large prod backfill won't time out.
- *
- * Each batch processes up to 50 legacy aiq_submission posts, mapping their
- * post-meta to structured table rows. Already-migrated posts are detected
- * via the cpt_post_id column on the new table and skipped.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -39,13 +29,6 @@ class AIQ_Migrate {
 		delete_option( self::PROGRESS_OPTION_KEY );
 	}
 
-	/**
-	 * Run a single backfill batch.
-	 *
-	 * Returns an array describing the batch outcome so the admin AJAX
-	 * handler can render a counter and decide whether another batch is
-	 * needed.
-	 */
 	public static function run_batch() {
 		global $wpdb;
 
@@ -54,7 +37,6 @@ class AIQ_Migrate {
 			$progress['started_at'] = current_time( 'mysql', true );
 		}
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery
 		$post_ids = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts}
@@ -66,7 +48,6 @@ class AIQ_Migrate {
 				self::BATCH_SIZE
 			)
 		);
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery
 
 		if ( empty( $post_ids ) ) {
 			$progress['completed_at'] = current_time( 'mysql', true );
@@ -105,7 +86,7 @@ class AIQ_Migrate {
 
 			$result = AIQ_DB::insert_submission( $row );
 			if ( is_wp_error( $result ) ) {
-				// Stop the batch on a hard DB error so the admin can see it.
+
 				update_option( self::PROGRESS_OPTION_KEY, $progress, false );
 				return array(
 					'done'      => false,
@@ -137,12 +118,6 @@ class AIQ_Migrate {
 		);
 	}
 
-	/**
-	 * Build a structured row from a legacy CPT post + its postmeta.
-	 *
-	 * Legacy CPT title format: "Assessment - 2026-04-12 09:11:42 - email@x.com"
-	 * Email is parsed off the title when present.
-	 */
 	private static function build_row_from_cpt( $post_id ) {
 		$post = get_post( $post_id );
 		if ( ! $post ) {
@@ -200,7 +175,7 @@ class AIQ_Migrate {
 
 	private static function count_remaining( $last_processed_id ) {
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
 		return (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->posts}
 			 WHERE post_type = 'aiq_submission'

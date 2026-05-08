@@ -1,15 +1,4 @@
-/**
- * JSON Generator for MITRE INFORM Assessment
- *
- * Produces a downloadable JSON that matches the upstream AttackIQ INFORM
- * tool format (`aiq-inform-tool`) so that historical results uploaded into
- * either the on-page comparison view or any future product import can be
- * read with the same shape.
- *
- * The shape (sections + threatProfile + downloadedDate) mirrors the Vue
- * reference implementation; older v1 files (pre-CTEM/TP) are still
- * acceptable on upload via a tolerant parser in the comparison engine.
- */
+
 
 const isSectionLike = (entry) => Boolean(entry && entry.section_id && Array.isArray(entry.questions));
 const isMultiSelectType = (type) => type === 'multiselect' || type === 'dropdownMultiSelect';
@@ -95,11 +84,6 @@ const buildSectionSnapshot = (section, userAnswers) => {
     };
 };
 
-/**
- * Build the threatProfile payload (TP section) — answers indexed by question
- * UID, value is an array of selected choice indices. Mirrors the upstream
- * `threatProfile` export shape for downstream analytics.
- */
 const buildThreatProfile = (sections, userAnswers) => {
     const tp = sections.find(s => s.section_id === 'TP');
     if (!tp) return undefined;

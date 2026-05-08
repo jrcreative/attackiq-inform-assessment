@@ -1,6 +1,4 @@
-// Phase 2 — extends the submit payload to populate the new
-// wp_aiq_submissions columns (lead, Threat Profile fields, score breakdown,
-// CTEM-skipped flag, recommendations) without breaking the legacy CPT path.
+
 
 const TP_QUESTION_TO_FIELD = {
     'TP.1': 'sector',
@@ -37,8 +35,7 @@ export const buildThreatProfile = (data, answers) => {
         if (!Array.isArray(ans) || ans.length === 0) return;
 
         if (field === 'regulatory' || field === 'dataSensitivity') {
-            // Multi-select fields → array of choice text values for the
-            // structured columns + JSON storage on the table.
+
             const values = ans
                 .map(idx => lookupChoiceText(tpSection, qid, idx))
                 .filter(Boolean);

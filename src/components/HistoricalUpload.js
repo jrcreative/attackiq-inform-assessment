@@ -15,12 +15,6 @@ const BRAND = {
     soft: '#f8f5fc',
 };
 
-/**
- * Lets the user upload up to N previous JSON exports for side-by-side
- * comparison on the Results page. Surfaces parsing errors and the
- * "missing sections appear as N/A" compatibility note when older files
- * predate CTEM or Threat Profile.
- */
 const HistoricalUpload = ({ data, onChange }) => {
     const fileInputRef = useRef(null);
     const [errors, setErrors] = useState([]);
@@ -65,7 +59,6 @@ const HistoricalUpload = ({ data, onChange }) => {
         setCount(sorted.length);
         onChange(sorted);
 
-        // Allow re-uploading the same filename without a remount.
         event.target.value = '';
     }, [data, onChange]);
 

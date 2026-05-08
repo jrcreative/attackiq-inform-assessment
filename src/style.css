@@ -155,7 +155,6 @@ body.admin-bar .aiq-wizard-header {
     margin-bottom: 30px !important;
 }
 
-
 .aiq-btn:disabled {
     opacity: 1;
     background: #fff !important;
@@ -727,7 +726,7 @@ body.admin-bar .aiq-wizard-header {
 .aiq-na-info-icon:hover svg {
     opacity: 0.8;
 }
-/* Phase 2 — dropdown question types (Threat Profile) */
+
 .aiq-dropdown-wrapper select,
 .aiq-dropdown-multi-wrapper select {
     -webkit-appearance: none;
@@ -755,27 +754,18 @@ body.admin-bar .aiq-wizard-header {
     color: #2d0064 !important;
 }
 
-/* Phase 2 — Skip CTEM banner */
 .aiq-ctem-skip-banner input[type="checkbox"] {
     width: 18px;
     height: 18px;
     cursor: pointer;
 }
 
-/* ============================================================
-   Phase 2 — AttackIQ branding pass
-   ============================================================ */
-
-/* Brand-purple focus rings on the new dropdown question types so they read
-   the same as the existing radio / checkbox cards. */
 .aiq-dropdown-wrapper select:focus-visible,
 .aiq-dropdown-multi-wrapper select:focus-visible {
     outline: 2px solid #40008f;
     outline-offset: 2px;
 }
 
-/* Tighter chip palette — sits cleanly next to the brand-purple borders we
-   use on selected radio / checkbox options. */
 .aiq-chip {
     background: #f3eefb !important;
     border-color: #cdb6e6 !important;
@@ -788,15 +778,11 @@ body.admin-bar .aiq-wizard-header {
     border-color: #b692de !important;
 }
 
-/* Skip-CTEM banner: align radius and spacing with the score-breakdown
-   cards so the Results page reads as one consistent system. */
 .aiq-ctem-skip-banner {
     border-radius: 6px;
     box-shadow: 0 1px 2px rgba(64, 0, 143, 0.04);
 }
 
-/* Recommendation cards: soften border, add subtle hover lift, and lock the
-   border-radius so they nest visually with the score-breakdown blocks above. */
 .aiq-rec-card {
     border-color: #ece6f5 !important;
     box-shadow: 0 1px 2px rgba(14, 8, 43, 0.04);
@@ -808,8 +794,6 @@ body.admin-bar .aiq-wizard-header {
     transform: translateY(-1px);
 }
 
-/* Historical comparison table — match the score-breakdown header treatment
-   so the comparison reads as part of the same results surface. */
 .aiq-historical-table-wrapper table th {
     font-weight: 700;
     letter-spacing: 0.2px;
@@ -819,16 +803,12 @@ body.admin-bar .aiq-wizard-header {
     background: #faf7ff;
 }
 
-/* Section header bars on the Results page — the WizardWrapper applies an
-   .aiq-section-<id> class so the brand sheet has a stable hook for any
-   future per-section tweaks (currently the inline gradient handles colors). */
 .aiq-section-cti  { letter-spacing: 0.3px; }
 .aiq-section-dm   { letter-spacing: 0.3px; }
 .aiq-section-te   { letter-spacing: 0.3px; }
 .aiq-section-ctem { letter-spacing: 0.3px; }
 .aiq-section-tp   { letter-spacing: 0.3px; }
 
-/* Upload control: brand-aligned focus ring on the visible button. */
 .aiq-historical-upload button:focus-visible {
     outline: 2px solid #40008f;
     outline-offset: 2px;

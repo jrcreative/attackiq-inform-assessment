@@ -1,21 +1,4 @@
 <?php
-/**
- * Phase 2 — REST endpoints for the assessment.
- *
- * `POST /aiq/v1/submit`         — public submission. Dual-writes to the
- *                                 legacy aiq_submission CPT *and* the new
- *                                 wp_aiq_submissions table. CPT continues
- *                                 to receive writes during the transition
- *                                 period; a table failure is logged but
- *                                 does not break the user-facing submit.
- *
- * `POST /aiq/v1/_admin/backfill-batch` — capability-gated (manage_options +
- *                                 wp_rest nonce) endpoint that runs a single
- *                                 backfill batch. Wired up to the "Run
- *                                 Backfill" button on the settings screen.
- *
- * Day 4 will add `GET /aiq/v1/submissions` (list + single) with API-key auth.
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -86,9 +69,6 @@ class AIQ_API {
 		$email = isset( $lead['email'] ) ? sanitize_email( $lead['email'] )
 			: ( isset( $params['email'] ) ? sanitize_email( $params['email'] ) : '' );
 
-		// Legacy CPT write — preserves the existing wp-admin "Assessments"
-		// list view that staff already use. Keep this path working
-		// regardless of what happens with the new table.
 		$post_title = 'Assessment - ' . current_time( 'Y-m-d H:i:s' );
 		if ( ! empty( $email ) ) {
 			$post_title .= ' - ' . $email;
@@ -108,7 +88,6 @@ class AIQ_API {
 		update_post_meta( $cpt_post_id, '_aiq_scores', $result );
 		update_post_meta( $cpt_post_id, '_aiq_ip', isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '' );
 
-		// New structured-table write (best-effort — never blocks the user).
 		$table_row = array(
 			'cpt_post_id'    => $cpt_post_id,
 			'email'          => $email,
@@ -146,22 +125,13 @@ class AIQ_API {
 		if ( ! is_wp_error( $submission_id ) ) {
 			$response['submission_id'] = $submission_id;
 		} else {
-			// Don't surface the DB error to the public submit response;
-			// it's already in the error log option for the admin.
+
 			$response['warning'] = 'Submission saved to legacy storage only';
 		}
 
 		return rest_ensure_response( $response );
 	}
 
-	/**
-	 * GET /aiq/v1/submissions — paginated, filterable list.
-	 *
-	 * Heavy fields (answers_json) are intentionally omitted from list
-	 * responses; consumers can fetch the single-record endpoint for the
-	 * full payload. Pagination follows WP Core REST conventions
-	 * (X-WP-Total / X-WP-TotalPages headers).
-	 */
 	public function handle_list_submissions( $request ) {
 		$args = array(
 			'date_from'    => $request->get_param( 'date_from' ),
@@ -177,7 +147,6 @@ class AIQ_API {
 			'order'        => $request->get_param( 'order' ) ?: 'DESC',
 		);
 
-		// Treat empty-string filters as absent so callers can omit them.
 		foreach ( array( 'min_score', 'max_score', 'ctem_skipped' ) as $k ) {
 			if ( '' === $args[ $k ] || null === $args[ $k ] ) {
 				$args[ $k ] = null;
@@ -220,10 +189,6 @@ class AIQ_API {
 		);
 	}
 
-	/**
-	 * GET /aiq/v1/submissions/{id} — full record incl. answers and any
-	 * recommendations / threat profile that were captured at submit time.
-	 */
 	public function handle_get_submission( $request ) {
 		$id  = intval( $request['id'] );
 		$row = AIQ_DB::get_submission( $id );

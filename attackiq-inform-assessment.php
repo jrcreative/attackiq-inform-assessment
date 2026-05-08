@@ -1,4 +1,10 @@
 <?php
+/**
+ * Plugin Name: AttackIQ Inform Assessment
+ * Description: Interactive Inform Assessment tool built with React.
+ * Version: 1.2.0
+ * Author: Volume11
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -12,8 +18,6 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin-list.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin.php';
 
-// Run dbDelta on activation. The maybe_upgrade() call inside init also catches
-// existing live installs whose schema version is missing or stale.
 register_activation_hook( __FILE__, array( 'AIQ_DB', 'install' ) );
 
 class AIQ_Inform_Assessment {

@@ -34,8 +34,6 @@ const getComponentScore = (q) => {
     return 5;
 };
 
-// Convert a 0-1 ratio (the historical export shape) into the same 1-5
-// maturity level the radar chart plots for the current dataset.
 const ratioToLevel = (ratio) => {
     if (ratio == null) return null;
     if (ratio <= 0)   return 0;
@@ -61,19 +59,10 @@ const formatHistoricalLabel = (record, index) => {
     return `Previous ${index + 1}`;
 };
 
-/**
- * Renders the radar with the current submission overlaid by up to N
- * historical uploads. Historical entries are matched per-section by id; a
- * section that's missing in an older file plots as 0 and is flagged via
- * the surrounding compatibility note in HistoricalUpload.
- */
 const RadarChart = ({ scores, historical = [] }) => {
     const labels = [];
     const currentValues = [];
-    // Collect the section ids that appear in today's labels so historical
-    // datasets can be aligned per-section. Each section contributes one
-    // averaged value (the mean across its questions) so older exports —
-    // which only carry section totals, never per-question data — line up.
+
     const sectionIds = [];
 
     scores.scoresBySection.forEach(section => {

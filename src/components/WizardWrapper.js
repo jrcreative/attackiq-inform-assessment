@@ -23,9 +23,6 @@ const BRAND_COLORS = {
     textLight: '#65616b'
 };
 
-// Visual identity per assessment section. Used by tab underline, results
-// breakdown headers, and the impact/complexity matrix legend so the user has a
-// consistent color cue across the experience.
 const SECTION_VISUALS = {
     CTI:  { tab: '#ffcc00',           bg: '#ffcc00', text: '#000', label: 'CTI'  },
     DM:   { tab: '#36bae4',           bg: '#36bae4', text: '#000', label: 'DM'   },
@@ -34,7 +31,6 @@ const SECTION_VISUALS = {
     TP:   { tab: BRAND_COLORS.accent, bg: BRAND_COLORS.accent, text: '#fff', label: 'TP' }
 };
 
-// Maps a section_id to the human label rendered in the tab strip.
 const SECTION_TAB_LABELS = {
     CTI:  'Cyber Threat Intelligence',
     DM:   'Defensive Measures',
@@ -65,8 +61,6 @@ const WizardWrapper = () => {
     const ctaUrl = config.contactUrl || '';
     const ctaText = config.contactButtonText || 'Improve Your Score';
 
-    // Pull section_id list from the data file so adding a tab is a data-only
-    // change. Fall back to the canonical order if a section is missing.
     const sectionEntries = useMemo(
         () => (Array.isArray(data) ? data.filter(isSectionEntry) : []),
         [data]
@@ -197,9 +191,7 @@ const WizardWrapper = () => {
     const overallScoreLabel = getScoreLabel(overallScoreLevel);
 
     const handleNext = async () => {
-        // When advancing onto the Results step, persist the assessment so the
-        // submission is captured even if the user closes the tab before
-        // downloading the PDF/JSON.
+
         if (step === lastQuestionStep - 1) {
             const finalResults = processResults(data, answers, { ctemSkipped });
             const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
@@ -284,10 +276,6 @@ const WizardWrapper = () => {
         }, 500);
     };
 
-    // Section breakdown for the Results page hides the unscored Threat Profile
-    // pillar and any section whose user-skipped flag is set (CTEM today). The
-    // upstream JSON still records every section so historical comparisons can
-    // line up — only the on-page visualisation suppresses unscored entries.
     const visibleScoredSections = (results?.scoresBySection || []).filter(s => s.scored);
 
     const renderSectionTabLabel = (sec, idx) => {
@@ -363,9 +351,6 @@ const WizardWrapper = () => {
                         const handleTabClick = () => {
                             if (idx === step) return;
 
-                            // If the user is jumping straight to the Results
-                            // step from an earlier tab, persist the in-progress
-                            // submission so we still capture the lead.
                             if (idx === lastQuestionStep && step < lastQuestionStep) {
                                 const finalResults = processResults(data, answers, { ctemSkipped });
                                 const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
