@@ -139,7 +139,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         pdf.text(overallLabel || 'Overall Score', pageWidth - margin - 30, yPos + 26, { align: 'center' });
 
         const sectionScoreY = yPos + 35;
-        const badgeSections = results.scoresBySection.filter(s => s.section_id !== 'TP');
+        const badgeSections = results.scoresBySection.filter(s => s.scored !== false);
         const badgeGap = 4;
         const badgeRowWidth = contentWidth - 20;
         const badgeWidth = (badgeRowWidth - badgeGap * (badgeSections.length - 1)) / badgeSections.length;
@@ -209,6 +209,7 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         yPos = 40;
 
         results.scoresBySection.forEach((section) => {
+            if (section.section_id === 'CTEM' && section.scored === false) return;
             const colors = SECTION_COLORS[section.section_id] || { rgb: [123, 63, 242], textRgb: [255, 255, 255] };
             const sScore = calculateSectionScore ? calculateSectionScore(section) : 0;
             const scoreLabel = sScore === -1 ? 'N/A' : String(sScore);
