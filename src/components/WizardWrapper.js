@@ -712,10 +712,14 @@ const WizardWrapper = () => {
                         </div>
 
                         <div className="aiq-results-right">
+                            <div id="aiq-matrix-container">
+                                <ImpactComplexityMatrix results={results} />
+                            </div>
+
                             <div id="aiq-radar-chart-container" style={{
                                 width: '100%',
                                 maxWidth: '450px',
-                                margin: '0 auto 30px'
+                                margin: '30px auto 30px'
                             }}>
                                 <RadarChart scores={results} historical={historicalResults} />
                             </div>
@@ -787,9 +791,6 @@ const WizardWrapper = () => {
                                     </table>
                                 </div>
                             )}
-                            <div id="aiq-matrix-container">
-                                <ImpactComplexityMatrix results={results} />
-                            </div>
                         </div>
                     </div>
                 ) : (
