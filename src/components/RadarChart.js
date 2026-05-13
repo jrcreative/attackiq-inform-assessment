@@ -62,24 +62,21 @@ const formatHistoricalLabel = (record, index) => {
 const RadarChart = ({ scores, historical = [] }) => {
     const labels = [];
     const currentValues = [];
-
-    const sectionIds = [];
+    const questionIds = [];
+    const questionSection = [];
 
     scores.scoresBySection.forEach(section => {
         if (!section.questions) return;
         if (section.scored === false) return;
 
-        let total = 0;
-        let count = 0;
         section.questions.forEach(q => {
-            total += getComponentScore(q);
-            count++;
+            const id = q.uid || q.componentKey;
+            if (!id) return;
+            labels.push(id);
+            currentValues.push(getComponentScore(q));
+            questionIds.push(id);
+            questionSection.push(section.section_id);
         });
-        const avg = count > 0 ? Math.round(total / count) : 0;
-
-        labels.push(section.shortname || section.section_id);
-        currentValues.push(avg);
-        sectionIds.push(section.section_id);
     });
 
     const datasets = [
@@ -96,20 +93,32 @@ const RadarChart = ({ scores, historical = [] }) => {
 
     historical.forEach((record, idx) => {
         const palette = HISTORICAL_PALETTE[idx % HISTORICAL_PALETTE.length];
-        const sectionMap = new Map();
+
+        const questionMap = new Map();
+        const sectionLevelMap = new Map();
         (record.sections || []).forEach(s => {
             if (!s || !s.section_id) return;
-            const ratio = (typeof s.ratio === 'number')
+            const sectionRatio = (typeof s.ratio === 'number')
                 ? s.ratio
                 : (s.totalPoints != null && s.possiblePoints && s.possiblePoints > 0
                     ? s.totalPoints / s.possiblePoints
                     : null);
-            sectionMap.set(s.section_id, ratioToLevel(ratio));
+            sectionLevelMap.set(s.section_id, ratioToLevel(sectionRatio));
+
+            (s.questions || []).forEach(q => {
+                if (!q || !q.uid) return;
+                const ratio = (q.totalPoints != null && q.possiblePoints && q.possiblePoints > 0)
+                    ? q.totalPoints / q.possiblePoints
+                    : null;
+                questionMap.set(q.uid, ratioToLevel(ratio));
+            });
         });
 
-        const data = sectionIds.map(id => {
-            const v = sectionMap.get(id);
-            return v == null ? 0 : v;
+        const data = questionIds.map((id, i) => {
+            const perQ = questionMap.get(id);
+            if (perQ != null) return perQ;
+            const sectionFallback = sectionLevelMap.get(questionSection[i]);
+            return sectionFallback == null ? 0 : sectionFallback;
         });
 
         datasets.push({
@@ -142,7 +151,7 @@ const RadarChart = ({ scores, historical = [] }) => {
                     color: '#999',
                 },
                 pointLabels: {
-                    font: { size: 12, family: 'Inter, sans-serif' },
+                    font: { size: 10, family: 'Inter, sans-serif' },
                     color: '#333',
                 },
             },

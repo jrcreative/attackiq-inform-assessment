@@ -27,6 +27,20 @@ const normalizeSection = (section, fallbackId) => {
     const possiblePoints = typeof section.possiblePoints === 'number' ? section.possiblePoints : null;
     const overallScore   = typeof section.overallScore   === 'number' ? section.overallScore   : null;
 
+    const questions = Array.isArray(section.questions)
+        ? section.questions
+            .map(q => {
+                if (!q || !q.uid) return null;
+                return {
+                    uid: q.uid,
+                    totalPoints:    typeof q.totalPoints    === 'number' ? q.totalPoints    : null,
+                    possiblePoints: typeof q.possiblePoints === 'number' ? q.possiblePoints : null,
+                    irrelevant:     Boolean(q.irrelevant),
+                };
+            })
+            .filter(Boolean)
+        : [];
+
     return {
         section_id: sectionId,
         name:       section.name      || section.shortname || sectionId,
@@ -37,6 +51,7 @@ const normalizeSection = (section, fallbackId) => {
         ratio: (totalPoints != null && possiblePoints && possiblePoints > 0)
             ? totalPoints / possiblePoints
             : null,
+        questions,
     };
 };
 
@@ -93,6 +108,7 @@ const padSections = (sections, expectedSectionIds) => {
                 possiblePoints: null,
                 overallScore: null,
                 ratio: null,
+                questions: [],
                 missing: true,
             });
         }
