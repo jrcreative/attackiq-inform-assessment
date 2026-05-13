@@ -745,7 +745,7 @@ const WizardWrapper = () => {
                         </button>
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                     {!isResultsStep ? (
                         <button
                             className="aiq-btn aiq-btn-primary"
@@ -756,13 +756,7 @@ const WizardWrapper = () => {
                     ) : (
                         <>
                         <HistoricalUpload compact data={data} onChange={setHistoricalResults} />
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                        {recommendationGroups.length > 0 && (
-                            <span style={{ fontSize: '11px', color: BRAND_COLORS.textLight, fontStyle: 'italic' }}>
-                                PDF includes tailored recommendations &amp; next steps
-                            </span>
-                        )}
-                        <div className="aiq-download-dropdown" style={{ position: 'relative' }}>
+                        <div className="aiq-download-dropdown" style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'stretch' }}>
                             <button
                                 className="aiq-btn aiq-btn-primary"
                                 onClick={(e) => {
@@ -770,7 +764,7 @@ const WizardWrapper = () => {
                                     setShowDownloadMenu(!showDownloadMenu);
                                 }}
                                 disabled={isGenerating}
-                                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
                                 {isGenerating ? (
                                     <>
@@ -812,7 +806,19 @@ const WizardWrapper = () => {
                                     </button>
                                 </div>
                             )}
-                        </div>
+                            {recommendationGroups.length > 0 && (
+                                <span style={{
+                                    display: 'block',
+                                    marginTop: '6px',
+                                    fontSize: '10px',
+                                    color: BRAND_COLORS.textLight,
+                                    fontStyle: 'italic',
+                                    lineHeight: '1.3',
+                                    textAlign: 'center'
+                                }}>
+                                    PDF includes tailored recommendations &amp; next steps
+                                </span>
+                            )}
                         </div>
                         </>
                     )}

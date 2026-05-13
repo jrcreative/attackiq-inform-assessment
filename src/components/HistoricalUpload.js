@@ -75,6 +75,11 @@ const HistoricalUpload = ({ data, onChange, compact = false }) => {
     if (compact) {
         return (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span
+                    className="aiq-upload-info-icon"
+                    data-tooltip={tooltipText}
+                    aria-label="About uploading previous assessments"
+                >i</span>
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -91,11 +96,7 @@ const HistoricalUpload = ({ data, onChange, compact = false }) => {
                 >
                     UPLOAD PREVIOUS
                 </button>
-                <span
-                    className="aiq-upload-info-icon"
-                    data-tooltip={tooltipText}
-                    aria-label="About uploading previous assessments"
-                >i</span>
+                
                 {count > 0 && (
                     <>
                         <span style={{ fontSize: '12px', color: BRAND.text }}>
