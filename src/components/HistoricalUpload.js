@@ -15,7 +15,7 @@ const BRAND = {
     soft: '#f8f5fc',
 };
 
-const HistoricalUpload = ({ data, onChange }) => {
+const HistoricalUpload = ({ data, onChange, compact = false }) => {
     const fileInputRef = useRef(null);
     const [errors, setErrors] = useState([]);
     const [compatNote, setCompatNote] = useState(false);
@@ -69,6 +69,63 @@ const HistoricalUpload = ({ data, onChange }) => {
         onChange([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
     }, [onChange]);
+
+    const tooltipText = `Filled out this assessment before? Upload up to ${MAX_FILES} previous JSON exports to see how your scores changed over time. Missing sections in older files (for example, before CTEM was added) will appear as N/A.`;
+
+    if (compact) {
+        return (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/json"
+                    multiple
+                    onChange={handleFileChange}
+                    style={{ display: 'none' }}
+                />
+                <button
+                    type="button"
+                    className="aiq-btn aiq-btn-secondary"
+                    onClick={triggerPicker}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                    UPLOAD PREVIOUS
+                </button>
+                <span
+                    className="aiq-upload-info-icon"
+                    data-tooltip={tooltipText}
+                    aria-label="About uploading previous assessments"
+                >i</span>
+                {count > 0 && (
+                    <>
+                        <span style={{ fontSize: '12px', color: BRAND.text }}>
+                            {count} loaded
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleClear}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                background: 'transparent',
+                                color: BRAND.muted,
+                                border: `1px solid ${BRAND.border}`,
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Clear
+                        </button>
+                    </>
+                )}
+                {errors.length > 0 && (
+                    <div style={{ flexBasis: '100%', marginTop: '6px', padding: '6px 10px', background: '#fff0f0', border: '1px solid #f5c2c7', borderRadius: '4px', fontSize: '12px', color: '#842029' }}>
+                        {errors.map((e, i) => <div key={i}>Error: {e}</div>)}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="aiq-historical-upload" style={{

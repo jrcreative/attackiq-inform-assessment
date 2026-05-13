@@ -813,3 +813,48 @@ body.admin-bar .aiq-wizard-header {
     outline: 2px solid #40008f;
     outline-offset: 2px;
 }
+
+.aiq-upload-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #40008f;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    cursor: help;
+    position: relative;
+    user-select: none;
+}
+.aiq-upload-info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #f5f5f5;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.4;
+    width: 280px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    white-space: normal;
+    text-align: left;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 100;
+}
+.aiq-upload-info-icon:hover::after,
+.aiq-upload-info-icon:focus::after {
+    opacity: 1;
+}

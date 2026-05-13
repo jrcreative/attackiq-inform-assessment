@@ -720,8 +720,6 @@ const WizardWrapper = () => {
                                 <RadarChart scores={results} historical={historicalResults} />
                             </div>
 
-                            <HistoricalUpload data={data} onChange={setHistoricalResults} />
-
                             {historicalResults.length > 0 && (
                                 <div className="aiq-historical-table-wrapper" style={{ marginTop: '20px', overflowX: 'auto' }}>
                                     <h4 style={{ fontSize: '14px', margin: '0 0 10px 0', color: BRAND_COLORS.navy, fontWeight: '700' }}>
@@ -831,6 +829,8 @@ const WizardWrapper = () => {
                             NEXT &nbsp; →
                         </button>
                     ) : (
+                        <>
+                        <HistoricalUpload compact data={data} onChange={setHistoricalResults} />
                         <div className="aiq-download-dropdown" style={{ position: 'relative' }}>
                             <button
                                 className="aiq-btn aiq-btn-primary"
@@ -882,6 +882,7 @@ const WizardWrapper = () => {
                                 </div>
                             )}
                         </div>
+                        </>
                     )}
                 </div>
             </div>
