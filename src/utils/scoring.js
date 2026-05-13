@@ -1,5 +1,7 @@
 
 
+import { getMatrixSuggestionChoiceIndices } from './matrixSuggestions';
+
 const SCORED_SECTION_IDS = ['CTI', 'DM', 'TE', 'CTEM'];
 
 const isSectionLike = (entry) => Boolean(entry && entry.section_id && Array.isArray(entry.questions));
@@ -167,38 +169,14 @@ export const processResults = (data, userAnswers, options = {}) => {
             let highest = true;
 
             if (includeInScoring) {
-                if (isSingleSelectType(question.type)) {
-                    if (!hasAnswer || answerIndices[0] < question.choices.length - 1) {
-                        const highestChoice = question.choices[question.choices.length - 1];
-                        if (highestChoice && highestChoice.impact > 0) {
-                            addToMap(
-                                highestChoice.impact,
-                                highestChoice.complexity,
-                                question,
-                                highestChoice,
-                                false,
-                                true,
-                                !hasAnswer
-                            );
-                        }
+                const suggestedIndices = getMatrixSuggestionChoiceIndices(question, answerIndices, false);
+                suggestedIndices.forEach((sIdx) => {
+                    const c = question.choices[sIdx];
+                    if (c && c.impact > 0) {
+                        addToMap(c.impact, c.complexity, question, c, false, false, !hasAnswer);
                         highest = false;
                     }
-                } else if (isMultiSelectType(question.type)) {
-                    question.choices.forEach((choice, index) => {
-                        if (!answerIndices.includes(index) && choice.impact > 0) {
-                            addToMap(
-                                choice.impact,
-                                choice.complexity,
-                                question,
-                                choice,
-                                false,
-                                false,
-                                !hasAnswer
-                            );
-                            highest = false;
-                        }
-                    });
-                }
+                });
 
                 if (hasAnswer && maxImpact > 0) {
                     addToMap(maxImpact, maxComplexity, question, null, true, highest, false);
