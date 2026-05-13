@@ -792,62 +792,6 @@ const WizardWrapper = () => {
                             <div id="aiq-matrix-container">
                                 <ImpactComplexityMatrix results={results} />
                             </div>
-
-                            {ctaUrl && (
-                                <div className="aiq-cta-section" style={{
-                                    marginTop: '30px',
-                                    padding: '25px',
-                                    background: `linear-gradient(135deg, ${BRAND_COLORS.primary} 0%, ${BRAND_COLORS.primaryDark} 100%)`,
-                                    borderRadius: '8px',
-                                    textAlign: 'center'
-                                }}>
-                                    <h3 style={{
-                                        margin: '0 0 10px 0',
-                                        fontSize: '18px',
-                                        fontWeight: '700',
-                                        color: '#ffffff'
-                                    }}>
-                                        Ready to Improve Your Security Posture?
-                                    </h3>
-                                    <p style={{
-                                        margin: '0 0 20px 0',
-                                        fontSize: '14px',
-                                        color: '#e5dfec',
-                                        lineHeight: '1.5'
-                                    }}>
-                                        Our experts can help you strengthen your threat-informed defense capabilities.
-                                    </p>
-                                    <a
-                                        href={ctaUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="aiq-cta-button"
-                                        style={{
-                                            display: 'inline-block',
-                                            padding: '12px 30px',
-                                            background: '#ffffff',
-                                            color: BRAND_COLORS.primary,
-                                            textDecoration: 'none',
-                                            fontWeight: '700',
-                                            fontSize: '14px',
-                                            borderRadius: '6px',
-                                            transition: 'transform 0.2s, box-shadow 0.2s',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px'
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.transform = 'translateY(-2px)';
-                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.transform = 'translateY(0)';
-                                            e.target.style.boxShadow = 'none';
-                                        }}
-                                    >
-                                        {ctaText}
-                                    </a>
-                                </div>
-                            )}
                         </div>
                     </div>
                 ) : (
