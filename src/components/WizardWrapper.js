@@ -586,82 +586,6 @@ const WizardWrapper = () => {
                                 );
                             })}
 
-                            <div className="aiq-recommendations" style={{ marginTop: '30px' }}>
-                                <h3 style={{ fontSize: '16px', marginBottom: '15px', color: BRAND_COLORS.navy, fontWeight: '700' }}>
-                                    Recommendations &amp; Next Steps
-                                </h3>
-
-                                {recommendationGroups.length === 0 ? (
-                                    <p style={{ fontSize: '13px', color: BRAND_COLORS.textLight, fontStyle: 'italic', padding: '12px', background: '#f9f9f9', border: '1px dashed #ddd', borderRadius: '4px' }}>
-                                        No tailored recommendations are defined for your current selections.
-                                    </p>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                        {recommendationGroups.map((group, idx) => {
-                                            const visuals = SECTION_VISUALS[group.sectionId] || { bg: BRAND_COLORS.primary, text: '#fff', label: group.sectionId };
-                                            const cb = group.choiceBlock;
-                                            return (
-                                                <div
-                                                    key={`${group.componentLabel}-${idx}`}
-                                                    className="aiq-rec-card"
-                                                    style={{
-                                                        border: '1px solid #e3e3e8',
-                                                        borderRadius: '6px',
-                                                        background: '#fff',
-                                                        overflow: 'hidden'
-                                                    }}
-                                                >
-                                                    <div style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        padding: '10px 14px',
-                                                        background: visuals.bg,
-                                                        color: visuals.text
-                                                    }}>
-                                                        <span style={{
-                                                            fontSize: '11px',
-                                                            fontWeight: '700',
-                                                            background: 'rgba(255,255,255,0.25)',
-                                                            padding: '2px 8px',
-                                                            borderRadius: '10px'
-                                                        }}>{visuals.label}</span>
-                                                        <span style={{ fontWeight: '700', fontSize: '13px' }}>{group.componentLabel}</span>
-                                                    </div>
-                                                    <div style={{ padding: '14px' }}>
-                                                        {cb.selectedLabel && (
-                                                            <div style={{ marginBottom: '10px', fontSize: '13px', color: BRAND_COLORS.text }}>
-                                                                <strong style={{ color: BRAND_COLORS.navy }}>Suggested level:</strong> {cb.selectedLabel}
-                                                            </div>
-                                                        )}
-                                                        {cb.primaryOwner && (
-                                                            <div style={{ marginBottom: '8px', fontSize: '12px', color: BRAND_COLORS.textLight }}>
-                                                                <strong style={{ color: BRAND_COLORS.navy }}>Primary owner:</strong> {cb.primaryOwner}
-                                                            </div>
-                                                        )}
-                                                        {cb.levelGoal && (
-                                                            <p style={{ margin: '0 0 10px 0', fontSize: '13px', lineHeight: '1.5', color: BRAND_COLORS.text }}>
-                                                                {cb.levelGoal}
-                                                            </p>
-                                                        )}
-                                                        {cb.recommendations.length > 0 && (
-                                                            <div>
-                                                                <div style={{ fontSize: '12px', fontWeight: '700', color: BRAND_COLORS.navy, marginBottom: '6px' }}>Next Steps</div>
-                                                                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', lineHeight: '1.5', color: BRAND_COLORS.text }}>
-                                                                    {cb.recommendations.map((line, li) => (
-                                                                        <li key={li} style={{ marginBottom: '4px' }}>{line}</li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-
                             <div style={{ marginTop: '30px' }}>
                                 <h3 style={{ fontSize: '16px', marginBottom: '15px', color: BRAND_COLORS.navy, fontWeight: '700' }}>
                                     Maturity Level Reference
@@ -832,6 +756,12 @@ const WizardWrapper = () => {
                     ) : (
                         <>
                         <HistoricalUpload compact data={data} onChange={setHistoricalResults} />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        {recommendationGroups.length > 0 && (
+                            <span style={{ fontSize: '11px', color: BRAND_COLORS.textLight, fontStyle: 'italic' }}>
+                                PDF includes tailored recommendations &amp; next steps
+                            </span>
+                        )}
                         <div className="aiq-download-dropdown" style={{ position: 'relative' }}>
                             <button
                                 className="aiq-btn aiq-btn-primary"
@@ -882,6 +812,7 @@ const WizardWrapper = () => {
                                     </button>
                                 </div>
                             )}
+                        </div>
                         </div>
                         </>
                     )}
