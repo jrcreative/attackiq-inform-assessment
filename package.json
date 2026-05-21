@@ -6,6 +6,7 @@
     "scripts": {
         "build": "wp-scripts build",
         "start": "wp-scripts start",
+        "dev:pdf": "node dev/pdf-preview-server.cjs",
         "format": "wp-scripts format",
         "lint:js": "wp-scripts lint-js",
         "packages-update": "wp-scripts packages-update",
