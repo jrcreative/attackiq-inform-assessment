@@ -73,8 +73,8 @@ class AIQ_Inform_Assessment {
 
 		$html = $this->prepare_pdf_html( $html );
 
-		$html_file = wp_tempnam( 'aiq-inform-report.html' );
-		$pdf_file  = wp_tempnam( 'aiq-inform-report.pdf' );
+		$html_file = $this->create_pdf_temp_file( 'aiq-inform-report', 'html' );
+		$pdf_file  = $this->create_pdf_temp_file( 'aiq-inform-report', 'pdf' );
 
 		if ( ! $html_file || ! $pdf_file ) {
 			wp_die( esc_html__( 'Unable to create temporary PDF files.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
@@ -124,6 +124,21 @@ class AIQ_Inform_Assessment {
 		return $html;
 	}
 
+	private function create_pdf_temp_file( $prefix, $extension ) {
+		$base = wp_tempnam( $prefix );
+		if ( ! $base ) {
+			return false;
+		}
+
+		$path = $base . '.' . ltrim( $extension, '.' );
+		if ( ! @rename( $base, $path ) ) {
+			@unlink( $base );
+			return false;
+		}
+
+		return $path;
+	}
+
 	private function locate_chromium() {
 		$candidates = array_filter( apply_filters( 'aiq_inform_chromium_paths', array(
 			defined( 'AIQ_INFORM_CHROMIUM_PATH' ) ? AIQ_INFORM_CHROMIUM_PATH : null,
@@ -163,6 +178,8 @@ class AIQ_Inform_Assessment {
 			return new WP_Error( 'aiq_pdf_proc_open_disabled', __( 'proc_open is required to generate PDFs with Chromium.', 'attackiq-inform-assessment' ) );
 		}
 
+		$html_url = 'file://' . str_replace( '%2F', '/', rawurlencode( wp_normalize_path( $html_file ) ) );
+
 		$command = implode( ' ', array(
 			escapeshellarg( $chromium ),
 			'--headless=new',
@@ -173,7 +190,7 @@ class AIQ_Inform_Assessment {
 			'--run-all-compositor-stages-before-draw',
 			'--virtual-time-budget=3000',
 			'--print-to-pdf=' . escapeshellarg( $pdf_file ),
-			escapeshellarg( 'file://' . wp_normalize_path( $html_file ) ),
+			escapeshellarg( $html_url ),
 		) );
 
 		$descriptors = array(
