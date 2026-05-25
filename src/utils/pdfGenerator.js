@@ -1,5 +1,3 @@
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { getScoreLabel } from './scoring';
 
 const PAGE_WIDTH = 880;
@@ -204,38 +202,6 @@ const splitRecommendations = (groups) => {
     return chunks;
 };
 
-const waitForFrame = () => new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-        if (!settled) {
-            settled = true;
-            resolve();
-        }
-    };
-
-    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
-        window.requestAnimationFrame(finish);
-    }
-    setTimeout(finish, 50);
-});
-
-const withTimeout = (promise, ms, label) => Promise.race([
-    promise,
-    new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-    }),
-]);
-
-const updatePreviewWindow = (previewWindow, message) => {
-    try {
-        if (previewWindow && !previewWindow.closed) {
-            previewWindow.document.body.innerHTML = `<div>${escapeHtml(message)}</div>`;
-        }
-    } catch (e) {
-        // The preview tab may have navigated; progress updates are best effort.
-    }
-};
-
 const scopeReportCss = (css) => css.replace(/(^|})\s*([^@{}][^{}]*)\{/g, (match, close, selectorText) => {
     const scopedSelectors = selectorText
         .split(',')
@@ -261,6 +227,21 @@ const scopeReportCss = (css) => css.replace(/(^|})\s*([^@{}][^{}]*)\{/g, (match,
 const renderStyles = () => `
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+    @page { size: ${PAGE_WIDTH}px ${PAGE_HEIGHT}px; margin: 0; }
+    @media print {
+      body { background-color: #FFFFFF !important; }
+      .aiq-pdf-render-root { width: ${PAGE_WIDTH}px !important; }
+      .page {
+        break-after: page;
+        page-break-after: always;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .page:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+    }
     ${scopeReportCss(`
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -831,20 +812,13 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         return false;
     }
 
-    const previewWindow = window.open('', '_blank');
-    if (previewWindow) {
-        previewWindow.document.write('<!doctype html><title>Generating PDF...</title><body style="margin:0;font-family:system-ui,sans-serif;background:#000029;color:#fff;display:grid;place-items:center;min-height:100vh;"><div>Generating PDF...</div></body>');
-        previewWindow.document.close();
+    const config = window.aiqInformData || {};
+    if (!config.pdf_url || !config.pdf_nonce) {
+        console.error('PDF download endpoint is not configured');
+        return false;
     }
 
-    const renderRoot = document.createElement('div');
-    renderRoot.style.position = 'fixed';
-    renderRoot.style.left = '-10000px';
-    renderRoot.style.top = '0';
-    renderRoot.style.width = `${PAGE_WIDTH}px`;
-    renderRoot.style.height = `${PAGE_HEIGHT}px`;
-    renderRoot.style.pointerEvents = 'none';
-    renderRoot.innerHTML = buildReportHtml({
+    const reportHtml = buildReportHtml({
         results,
         overallLevel,
         overallLabel,
@@ -853,73 +827,57 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
         threatProfile,
     });
 
-    document.body.appendChild(renderRoot);
+    const reportDocument = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AttackIQ INFORM Assessment Report</title>
+</head>
+<body>
+${reportHtml}
+</body>
+</html>`;
 
-    try {
-        updatePreviewWindow(previewWindow, 'Preparing report layout...');
-        await waitForFrame();
-
-        const reportRoot = renderRoot.querySelector('.aiq-pdf-render-root');
-        if (!reportRoot) {
-            throw new Error('PDF render root was not created');
-        }
-
-        if (document.fonts?.ready) {
-            updatePreviewWindow(previewWindow, 'Loading report fonts...');
-            await withTimeout(Promise.all([
-                document.fonts.load('700 38px Poppins'),
-                document.fonts.load('800 56px Poppins'),
-                document.fonts.load('400 15px "Source Sans 3"'),
-                document.fonts.load('600 15px "Source Sans 3"'),
-                document.fonts.load('700 15px "Source Sans 3"'),
-            ]), 4000, 'PDF font loading').catch((fontError) => {
-                console.warn('PDF fonts did not finish loading; using available browser fonts.', fontError);
-            });
-            await withTimeout(document.fonts.ready, 4000, 'PDF font readiness').catch((fontError) => {
-                console.warn('PDF fonts were not ready in time; continuing.', fontError);
-            });
-        }
-
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [PAGE_WIDTH, PAGE_HEIGHT] });
-        const pages = Array.from(reportRoot.querySelectorAll('.page'));
-
-        for (let i = 0; i < pages.length; i++) {
-            updatePreviewWindow(previewWindow, `Rendering page ${i + 1} of ${pages.length}...`);
-            await waitForFrame();
-            const canvas = await withTimeout(html2canvas(pages[i], {
-                scale: 1.5,
-                useCORS: true,
-                logging: false,
-                backgroundColor: '#ffffff',
-                width: PAGE_WIDTH,
-                height: PAGE_HEIGHT,
-                windowWidth: PAGE_WIDTH,
-                windowHeight: PAGE_HEIGHT,
-            }), 20000, `Rendering PDF page ${i + 1}`);
-
-            if (i > 0) pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'portrait');
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
-        }
-
-        updatePreviewWindow(previewWindow, 'Opening PDF...');
-        const pdfBlob = pdf.output('blob');
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-
-        if (previewWindow && !previewWindow.closed) {
-            previewWindow.location.href = pdfUrl;
-        } else {
-            window.location.href = pdfUrl;
-        }
-
-        setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
-        return true;
-    } catch (error) {
-        console.error('Error generating PDF:', error);
-        updatePreviewWindow(previewWindow, `PDF generation failed: ${error.message}`);
-        return false;
-    } finally {
-        renderRoot.remove();
+    const frameName = 'aiq-pdf-download-frame';
+    let frame = document.querySelector(`iframe[name="${frameName}"]`);
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.name = frameName;
+        frame.title = 'PDF download';
+        frame.style.position = 'fixed';
+        frame.style.width = '1px';
+        frame.style.height = '1px';
+        frame.style.left = '-9999px';
+        frame.style.top = '-9999px';
+        frame.style.border = '0';
+        document.body.appendChild(frame);
     }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = config.pdf_url;
+    form.target = frameName;
+    form.style.display = 'none';
+
+    const fields = {
+        action: 'aiq_generate_pdf',
+        _wpnonce: config.pdf_nonce,
+        filename,
+        html: reportDocument,
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+        const field = document.createElement('textarea');
+        field.name = name;
+        field.value = value;
+        form.appendChild(field);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    return true;
 };
 
 export default generatePDF;

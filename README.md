@@ -34,6 +34,14 @@ Once activated, you can configure the plugin settings via the WordPress Admin Da
     -   **Contact Button Text**: The text to display on the button (e.g., "Improve Your Score").
 4.  Click **Save Changes**.
 
+### Server-Side PDF Generation
+
+PDF reports are rendered on the server with headless Chromium. Install `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable` on the web server, or define `AIQ_INFORM_CHROMIUM_PATH` with the full executable path before WordPress loads.
+
+```php
+define( 'AIQ_INFORM_CHROMIUM_PATH', '/usr/bin/chromium' );
+```
+
 ## Usage
 
 To display the assessment on a page or post, use the `[inform_assessment]` shortcode.

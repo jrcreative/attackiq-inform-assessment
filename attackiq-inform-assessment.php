@@ -34,6 +34,8 @@ class AIQ_Inform_Assessment {
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_post_aiq_generate_api_key', array( $this, 'handle_generate_api_key' ) );
 		add_action( 'admin_post_aiq_revoke_api_key', array( $this, 'handle_revoke_api_key' ) );
+		add_action( 'admin_post_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
+		add_action( 'admin_post_nopriv_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
 	}
 
 	public function handle_generate_api_key() {
@@ -54,6 +56,150 @@ class AIQ_Inform_Assessment {
 		AIQ_Auth::revoke();
 		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
 		exit;
+	}
+
+	public function handle_generate_pdf() {
+		check_admin_referer( 'aiq_generate_pdf' );
+
+		$html = isset( $_POST['html'] ) ? wp_unslash( $_POST['html'] ) : '';
+		if ( empty( $html ) ) {
+			wp_die( esc_html__( 'Missing report HTML.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
+		}
+
+		$filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : 'AttackIQ-INFORM-Assessment-Report.pdf';
+		if ( '.pdf' !== substr( strtolower( $filename ), -4 ) ) {
+			$filename .= '.pdf';
+		}
+
+		$html = $this->prepare_pdf_html( $html );
+
+		$html_file = wp_tempnam( 'aiq-inform-report.html' );
+		$pdf_file  = wp_tempnam( 'aiq-inform-report.pdf' );
+
+		if ( ! $html_file || ! $pdf_file ) {
+			wp_die( esc_html__( 'Unable to create temporary PDF files.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		file_put_contents( $html_file, $html );
+
+		$chromium = $this->locate_chromium();
+		if ( ! $chromium ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html__( 'Chromium was not found on the server. Set AIQ_INFORM_CHROMIUM_PATH or install chromium/google-chrome.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		$result = $this->render_pdf_with_chromium( $chromium, $html_file, $pdf_file );
+		if ( is_wp_error( $result ) ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html( $result->get_error_message() ), '', array( 'response' => 500 ) );
+		}
+
+		if ( ! file_exists( $pdf_file ) || filesize( $pdf_file ) < 1000 ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html__( 'Chromium did not produce a readable PDF.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		nocache_headers();
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $pdf_file ) );
+		readfile( $pdf_file );
+
+		@unlink( $html_file );
+		@unlink( $pdf_file );
+		exit;
+	}
+
+	private function prepare_pdf_html( $html ) {
+		$html = preg_replace( '#<script\b[^>]*>.*?</script>#is', '', $html );
+		$html = preg_replace( '#<(iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html );
+
+		if ( ! preg_match( '/^\s*<!doctype html>/i', $html ) ) {
+			$html = '<!doctype html><html><head><meta charset="utf-8"><title>AttackIQ INFORM Assessment Report</title></head><body>' . $html . '</body></html>';
+		}
+
+		return $html;
+	}
+
+	private function locate_chromium() {
+		$candidates = array_filter( apply_filters( 'aiq_inform_chromium_paths', array(
+			defined( 'AIQ_INFORM_CHROMIUM_PATH' ) ? AIQ_INFORM_CHROMIUM_PATH : null,
+			getenv( 'AIQ_INFORM_CHROMIUM_PATH' ),
+			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+			'/Applications/Chromium.app/Contents/MacOS/Chromium',
+			'/usr/bin/google-chrome-stable',
+			'/usr/bin/google-chrome',
+			'/usr/bin/chromium-browser',
+			'/usr/bin/chromium',
+			'google-chrome-stable',
+			'google-chrome',
+			'chromium-browser',
+			'chromium',
+		) ) );
+
+		foreach ( $candidates as $candidate ) {
+			if ( false !== strpos( $candidate, '/' ) && is_executable( $candidate ) ) {
+				return $candidate;
+			}
+
+			if ( false === strpos( $candidate, '/' ) && function_exists( 'exec' ) ) {
+				$output = array();
+				$status = 1;
+				exec( 'command -v ' . escapeshellarg( $candidate ) . ' 2>/dev/null', $output, $status );
+				if ( 0 === $status && ! empty( $output[0] ) && is_executable( $output[0] ) ) {
+					return $output[0];
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function render_pdf_with_chromium( $chromium, $html_file, $pdf_file ) {
+		if ( ! function_exists( 'proc_open' ) ) {
+			return new WP_Error( 'aiq_pdf_proc_open_disabled', __( 'proc_open is required to generate PDFs with Chromium.', 'attackiq-inform-assessment' ) );
+		}
+
+		$command = implode( ' ', array(
+			escapeshellarg( $chromium ),
+			'--headless=new',
+			'--disable-gpu',
+			'--disable-dev-shm-usage',
+			'--no-sandbox',
+			'--no-pdf-header-footer',
+			'--run-all-compositor-stages-before-draw',
+			'--virtual-time-budget=3000',
+			'--print-to-pdf=' . escapeshellarg( $pdf_file ),
+			escapeshellarg( 'file://' . wp_normalize_path( $html_file ) ),
+		) );
+
+		$descriptors = array(
+			0 => array( 'pipe', 'r' ),
+			1 => array( 'pipe', 'w' ),
+			2 => array( 'pipe', 'w' ),
+		);
+
+		$process = proc_open( $command, $descriptors, $pipes );
+		if ( ! is_resource( $process ) ) {
+			return new WP_Error( 'aiq_pdf_chromium_failed', __( 'Unable to start Chromium.', 'attackiq-inform-assessment' ) );
+		}
+
+		fclose( $pipes[0] );
+		$stdout = stream_get_contents( $pipes[1] );
+		$stderr = stream_get_contents( $pipes[2] );
+		fclose( $pipes[1] );
+		fclose( $pipes[2] );
+
+		$status = proc_close( $process );
+		if ( 0 !== $status ) {
+			$message = trim( $stderr ?: $stdout );
+			return new WP_Error( 'aiq_pdf_chromium_failed', $message ? sprintf( __( 'Chromium PDF generation failed: %s', 'attackiq-inform-assessment' ), $message ) : __( 'Chromium PDF generation failed.', 'attackiq-inform-assessment' ) );
+		}
+
+		return true;
 	}
 
 	public function register_scripts() {
@@ -92,7 +238,9 @@ class AIQ_Inform_Assessment {
 
 		wp_localize_script( 'aiq-inform-assessment', 'aiqInformData', array(
             'root_id' => 'aiq-inform-assessment-root',
-            'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'pdf_url' => admin_url( 'admin-post.php' ),
+			'pdf_nonce' => wp_create_nonce( 'aiq_generate_pdf' ),
 			'rest_url' => rest_url( 'aiq/v1/' ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),
 			'siteUrl' => site_url(),
