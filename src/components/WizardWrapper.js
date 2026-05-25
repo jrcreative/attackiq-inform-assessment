@@ -334,8 +334,29 @@ const WizardWrapper = () => {
         </div>
     );
 
+    const renderPdfLoader = () => (
+        <div className="aiq-pdf-loader-overlay" role="status" aria-live="polite" aria-label="Generating PDF report">
+            <div className="aiq-pdf-loader-card">
+                <div className="aiq-pdf-loader-mark" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div className="aiq-pdf-loader-copy">
+                    <p className="aiq-pdf-loader-kicker">Building PDF report</p>
+                    <h2>Preparing your INFORM assessment</h2>
+                    <p>Rendering the finished pages with AttackIQ styling.</p>
+                </div>
+                <div className="aiq-pdf-loader-rail" aria-hidden="true">
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <div className="aiq-assessment-container" ref={containerRef}>
+            {isGenerating && renderPdfLoader()}
             <div className="aiq-wizard-header" ref={wizardHeaderRef}>
                 <ul className="aiq-steps-nav">
                     {sections.map((sec, idx) => {

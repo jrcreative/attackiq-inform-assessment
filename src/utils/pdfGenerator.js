@@ -202,6 +202,42 @@ const splitRecommendations = (groups) => {
     return chunks;
 };
 
+const createDownloadToken = () => `aiq_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+const getCookieValue = (name) => {
+    if (typeof document === 'undefined') return '';
+    return document.cookie
+        .split(';')
+        .map(cookie => cookie.trim())
+        .find(cookie => cookie.startsWith(`${name}=`))
+        ?.split('=')
+        .slice(1)
+        .join('=') || '';
+};
+
+const clearCookie = (name) => {
+    document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+};
+
+const waitForDownloadCookie = (token, timeoutMs = 90000) => new Promise((resolve) => {
+    const cookieName = `aiq_pdf_download_${token}`;
+    const startedAt = Date.now();
+
+    const intervalId = window.setInterval(() => {
+        if (getCookieValue(cookieName) === 'complete') {
+            window.clearInterval(intervalId);
+            clearCookie(cookieName);
+            resolve(true);
+            return;
+        }
+
+        if (Date.now() - startedAt > timeoutMs) {
+            window.clearInterval(intervalId);
+            resolve(false);
+        }
+    }, 350);
+});
+
 const scopeReportCss = (css) => css.replace(/(^|})\s*([^@{}][^{}]*)\{/g, (match, close, selectorText) => {
     const scopedSelectors = selectorText
         .split(',')
@@ -839,6 +875,7 @@ ${reportHtml}
 </html>`;
 
     const frameName = 'aiq-pdf-download-frame';
+    const downloadToken = createDownloadToken();
     let frame = document.querySelector(`iframe[name="${frameName}"]`);
     if (!frame) {
         frame = document.createElement('iframe');
@@ -863,6 +900,7 @@ ${reportHtml}
         action: 'aiq_generate_pdf',
         _wpnonce: config.pdf_nonce,
         filename,
+        download_token: downloadToken,
         html: reportDocument,
     };
 
@@ -877,7 +915,12 @@ ${reportHtml}
     form.submit();
     form.remove();
 
-    return true;
+    const completed = await waitForDownloadCookie(downloadToken);
+    if (!completed) {
+        console.warn('PDF download did not confirm completion before the loader timed out.');
+    }
+
+    return completed;
 };
 
 export default generatePDF;

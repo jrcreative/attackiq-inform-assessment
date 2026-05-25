@@ -70,6 +70,7 @@ class AIQ_Inform_Assessment {
 		if ( '.pdf' !== substr( strtolower( $filename ), -4 ) ) {
 			$filename .= '.pdf';
 		}
+		$download_token = isset( $_POST['download_token'] ) ? sanitize_key( wp_unslash( $_POST['download_token'] ) ) : '';
 
 		$html = $this->prepare_pdf_html( $html );
 
@@ -103,6 +104,7 @@ class AIQ_Inform_Assessment {
 		}
 
 		nocache_headers();
+		$this->set_pdf_download_cookie( $download_token );
 		header( 'Content-Type: application/pdf' );
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
 		header( 'Content-Length: ' . filesize( $pdf_file ) );
@@ -137,6 +139,22 @@ class AIQ_Inform_Assessment {
 		}
 
 		return $path;
+	}
+
+	private function set_pdf_download_cookie( $download_token ) {
+		if ( empty( $download_token ) || headers_sent() ) {
+			return;
+		}
+
+		$path = defined( 'COOKIEPATH' ) && COOKIEPATH ? COOKIEPATH : '/';
+		$cookie = sprintf(
+			'%s=complete; Max-Age=120; Path=%s; SameSite=Lax%s',
+			rawurlencode( 'aiq_pdf_download_' . $download_token ),
+			$path,
+			is_ssl() ? '; Secure' : ''
+		);
+
+		header( 'Set-Cookie: ' . $cookie, false );
 	}
 
 	private function locate_chromium() {
