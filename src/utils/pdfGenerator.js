@@ -332,7 +332,7 @@ const renderStyles = () => `
       border-color: ${BRAND.rule};
     }
     .logo { display: inline-flex; align-items: center; gap: 8px; line-height: 1; color: ${BRAND.ink}; overflow: visible; }
-    .logo svg { display: block; width: 108px; height: auto; position: relative; top: 3px; overflow: visible; }
+    .logo svg { display: block; width: 108px; height: auto; position: relative; top: 1px; overflow: visible; }
     .logo-inform { font-size: 11px; font-weight: 800; letter-spacing: 0.25em; color: ${BRAND.ink}; position: relative; top: 1px; }
     .cover { background-color: ${BRAND.ink}; color: ${BRAND.paper}; padding: 0; }
     .cover-mesh {
