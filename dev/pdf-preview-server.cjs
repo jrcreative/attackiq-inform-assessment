@@ -23,8 +23,6 @@ const send = (res, status, body, type = 'text/html; charset=utf-8') => {
 const readPdfPreviewModule = () => {
     let source = fs.readFileSync(pdfGeneratorPath, 'utf8');
     source = source
-        .replace(/import html2canvas from 'html2canvas';\n/, '')
-        .replace(/import jsPDF from 'jspdf';\n/, '')
         .replace(/import \{ getScoreLabel \} from '\.\/scoring';\n/, `
 const getScoreLabel = (level) => {
     switch (level) {
