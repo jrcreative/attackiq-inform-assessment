@@ -10,15 +10,16 @@ class AIQ_Submission {
 
 	public function register_post_type() {
 		$args = array(
-			'public'    => false,
-			'show_ui'   => true,
-			'label'     => 'Assessments',
-			'supports'  => array( 'title', 'custom-fields' ),
-			'menu_icon' => 'dashicons-chart-bar',
-            'capabilities' => array(
-                'create_posts' => 'do_not_allow',
-            ),
-            'map_meta_cap' => true,
+			'public'       => false,
+			'show_ui'      => true,
+			'show_in_menu' => false,
+			'label'        => 'Assessments',
+			'supports'     => array( 'title', 'custom-fields' ),
+			'menu_icon'    => 'dashicons-chart-bar',
+			'capabilities' => array(
+				'create_posts' => 'do_not_allow',
+			),
+			'map_meta_cap' => true,
 		);
 		register_post_type( 'aiq_submission', $args );
 	}

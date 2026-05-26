@@ -117,10 +117,27 @@ class AIQ_Admin_List_Table extends WP_List_Table {
 
 	public function column_actions( $item ) {
 		$id = intval( $item['id'] );
+
+		$delete_url = wp_nonce_url(
+			add_query_arg(
+				array(
+					'action' => 'aiq_delete_submission',
+					'id'     => $id,
+				),
+				admin_url( 'admin-post.php' )
+			),
+			'aiq_delete_submission_' . $id
+		);
+
+		$confirm = esc_attr( sprintf( __( 'Delete submission #%d? This cannot be undone.', 'attackiq-inform-assessment' ), $id ) );
+
 		return sprintf(
-			'<a href="#" class="aiq-view-json button button-small" data-id="%d">%s</a>',
+			'<a href="#" class="aiq-view-json button button-small" data-id="%1$d">%2$s</a> <a href="%3$s" class="button button-small button-link-delete" onclick="return confirm(\'%4$s\');">%5$s</a>',
 			$id,
-			esc_html__( 'View JSON', 'attackiq-inform-assessment' )
+			esc_html__( 'View', 'attackiq-inform-assessment' ),
+			esc_url( $delete_url ),
+			$confirm,
+			esc_html__( 'Delete', 'attackiq-inform-assessment' )
 		);
 	}
 
