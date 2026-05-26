@@ -458,13 +458,6 @@ body.admin-bar .aiq-wizard-header {
     line-height: 1.15;
 }
 
-.aiq-pdf-loader-copy p:last-child {
-    margin: 0;
-    color: #65616b;
-    font-size: 14px;
-    line-height: 1.45;
-}
-
 .aiq-pdf-loader-rail {
     position: relative;
     z-index: 1;

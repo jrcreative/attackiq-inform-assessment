@@ -345,7 +345,6 @@ const WizardWrapper = () => {
                 <div className="aiq-pdf-loader-copy">
                     <p className="aiq-pdf-loader-kicker">Building PDF report</p>
                     <h2>Preparing your INFORM assessment</h2>
-                    <p>Rendering the finished pages with AttackIQ styling.</p>
                 </div>
                 <div className="aiq-pdf-loader-rail" aria-hidden="true">
                     <span></span>
