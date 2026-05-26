@@ -206,6 +206,23 @@ class AIQ_DB {
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ), ARRAY_A );
 	}
 
+	public static function delete_submission( $id ) {
+		global $wpdb;
+		$table = self::get_table_name();
+		$id    = intval( $id );
+
+		$row = self::get_submission( $id );
+		if ( ! $row ) {
+			return false;
+		}
+
+		if ( ! empty( $row['cpt_post_id'] ) ) {
+			wp_delete_post( intval( $row['cpt_post_id'] ), true );
+		}
+
+		return false !== $wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+	}
+
 	public static function count_rows() {
 		global $wpdb;
 		$table = self::get_table_name();

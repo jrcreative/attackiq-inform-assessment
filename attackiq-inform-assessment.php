@@ -46,7 +46,7 @@ class AIQ_Inform_Assessment {
 		}
 		check_admin_referer( 'aiq_generate_api_key' );
 		AIQ_Auth::generate_and_store();
-		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
 		exit;
 	}
 
@@ -56,7 +56,7 @@ class AIQ_Inform_Assessment {
 		}
 		check_admin_referer( 'aiq_revoke_api_key' );
 		AIQ_Auth::revoke();
-		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
 		exit;
 	}
 
@@ -319,9 +319,10 @@ class AIQ_Inform_Assessment {
 	}
 
 	public function add_settings_page() {
-		add_options_page(
+		add_submenu_page(
+			'aiq-submissions',
 			__( 'INFORM Assessment Settings', 'attackiq-inform-assessment' ),
-			__( 'INFORM Assessment', 'attackiq-inform-assessment' ),
+			__( 'Settings', 'attackiq-inform-assessment' ),
 			'manage_options',
 			'aiq-inform-assessment-settings',
 			array( $this, 'render_settings_page' )
