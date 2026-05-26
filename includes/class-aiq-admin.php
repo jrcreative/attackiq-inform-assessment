@@ -146,7 +146,10 @@ class AIQ_Admin {
 				fetch(REST_BASE + id, {
 					credentials: 'same-origin',
 					headers: { 'X-WP-Nonce': NONCE }
-				}).then(function(r){ return r.json(); }).then(function(data){
+				}).then(function(r){
+					if (!r.ok) throw new Error('HTTP ' + r.status);
+					return r.json();
+				}).then(function(data){
 					current = data;
 					var parts = [];
 					if (data.email) parts.push('Email: ' + data.email);
@@ -189,7 +192,7 @@ class AIQ_Admin {
 
 		$args = AIQ_Admin_List_Table::filters_from_request( $_GET );
 
-		$args['per_page'] = 100;
+		$args['per_page'] = 500;
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
@@ -241,7 +244,7 @@ class AIQ_Admin {
 			}
 
 			$page++;
-			$total_pages = max( 1, (int) ceil( $result['total'] / $args['per_page'] ) );
+			$total_pages = max( 1, (int) ceil( $result['total'] / 500 ) );
 		} while ( $page <= $total_pages );
 
 		fclose( $out );

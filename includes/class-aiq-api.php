@@ -14,7 +14,7 @@ class AIQ_API {
 		register_rest_route( 'aiq/v1', '/submit', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'handle_submission' ),
-			'permission_callback' => '__return_true',
+			'permission_callback' => array( $this, 'submission_permission_check' ),
 		) );
 
 		register_rest_route( 'aiq/v1', '/submissions', array(
@@ -53,6 +53,14 @@ class AIQ_API {
 		return current_user_can( 'manage_options' );
 	}
 
+	public function submission_permission_check( $request ) {
+		$nonce = $request->get_header( 'x_wp_nonce' );
+		if ( empty( $nonce ) || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+			return new WP_Error( 'aiq_submission_nonce_invalid', 'Invalid submission nonce', array( 'status' => 403 ) );
+		}
+		return true;
+	}
+
 	public function handle_submission( $request ) {
 		$params = $request->get_json_params();
 
@@ -60,7 +68,7 @@ class AIQ_API {
 			return new WP_Error( 'no_data', 'Missing answers data', array( 'status' => 400 ) );
 		}
 
-		$answers = $params['answers'];
+		$answers = is_array( $params['answers'] ) ? $params['answers'] : array();
 		$result  = isset( $params['result'] ) && is_array( $params['result'] ) ? $params['result'] : array();
 		$lead    = isset( $params['lead'] ) && is_array( $params['lead'] ) ? $params['lead'] : array();
 		$tp      = isset( $params['threatProfile'] ) && is_array( $params['threatProfile'] ) ? $params['threatProfile'] : array();
@@ -77,15 +85,15 @@ class AIQ_API {
 		$cpt_post_id = wp_insert_post( array(
 			'post_type'   => 'aiq_submission',
 			'post_status' => 'publish',
-			'post_title'  => $post_title,
+			'post_title'  => sanitize_text_field( $post_title ),
 		) );
 
 		if ( is_wp_error( $cpt_post_id ) ) {
 			return $cpt_post_id;
 		}
 
-		update_post_meta( $cpt_post_id, '_aiq_answers', $answers );
-		update_post_meta( $cpt_post_id, '_aiq_scores', $result );
+		update_post_meta( $cpt_post_id, '_aiq_answers', $this->sanitize_recursive( $answers ) );
+		update_post_meta( $cpt_post_id, '_aiq_scores', $this->sanitize_recursive( $result ) );
 		update_post_meta( $cpt_post_id, '_aiq_ip', isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '' );
 
 		$table_row = array(
@@ -107,9 +115,9 @@ class AIQ_API {
 			'ctem_score'     => isset( $result['ctemScore'] ) ? $result['ctemScore'] : null,
 			'ctem_skipped'   => ! empty( $result['ctemSkipped'] ),
 			'maturity_level' => isset( $result['maturityLevel'] ) ? $result['maturityLevel'] : null,
-			'answers'        => $answers,
-			'recommendations' => $recs,
-			'threat_profile' => $tp,
+			'answers'        => $this->sanitize_recursive( $answers ),
+			'recommendations' => $this->sanitize_recursive( $recs ),
+			'threat_profile' => $this->sanitize_recursive( $tp ),
 			'ip'             => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '',
 			'user_agent'     => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
 		);
@@ -234,6 +242,23 @@ class AIQ_API {
 		}
 		$decoded = json_decode( $json, true );
 		return ( JSON_ERROR_NONE === json_last_error() ) ? $decoded : null;
+	}
+
+	private function sanitize_recursive( $value ) {
+		if ( is_array( $value ) ) {
+			$clean = array();
+			foreach ( $value as $key => $item ) {
+				$clean[ is_string( $key ) ? sanitize_text_field( $key ) : $key ] = $this->sanitize_recursive( $item );
+			}
+			return $clean;
+		}
+		if ( is_string( $value ) ) {
+			return sanitize_textarea_field( $value );
+		}
+		if ( is_bool( $value ) || is_int( $value ) || is_float( $value ) || null === $value ) {
+			return $value;
+		}
+		return sanitize_text_field( (string) $value );
 	}
 
 	public function handle_backfill_batch( $request ) {

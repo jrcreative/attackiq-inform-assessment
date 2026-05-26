@@ -22,6 +22,8 @@ register_activation_hook( __FILE__, array( 'AIQ_DB', 'install' ) );
 
 class AIQ_Inform_Assessment {
 
+	const PDF_MAX_HTML_BYTES = 4000000;
+
 	private $default_marketo_form_id = '';
 	private $default_marketo_instance = 'app-ab33.marketo.com';
 	private $default_munchkin_id = '041-FSQ-281';
@@ -64,6 +66,12 @@ class AIQ_Inform_Assessment {
 		$html = isset( $_POST['html'] ) ? wp_unslash( $_POST['html'] ) : '';
 		if ( empty( $html ) ) {
 			wp_die( esc_html__( 'Missing report HTML.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
+		}
+		if ( strlen( $html ) > self::PDF_MAX_HTML_BYTES ) {
+			wp_die( esc_html__( 'Report HTML is too large to render.', 'attackiq-inform-assessment' ), '', array( 'response' => 413 ) );
+		}
+		if ( false === strpos( $html, 'aiq-pdf-render-root' ) ) {
+			wp_die( esc_html__( 'Invalid report payload.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
 		}
 
 		$filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : 'AttackIQ-INFORM-Assessment-Report.pdf';
@@ -118,9 +126,22 @@ class AIQ_Inform_Assessment {
 	private function prepare_pdf_html( $html ) {
 		$html = preg_replace( '#<script\b[^>]*>.*?</script>#is', '', $html );
 		$html = preg_replace( '#<(iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html );
+		$html = preg_replace( '#<(link|base)\b[^>]*>#is', '', $html );
+		$html = preg_replace( '#<meta\b[^>]*http-equiv\s*=\s*["\']?refresh["\']?[^>]*>#is', '', $html );
+		$html = preg_replace( '/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/is', '', $html );
+		$html = preg_replace( '/(href|src)\s*=\s*(["\'])\s*(javascript:|file:)[^"\']*\2/is', '$1="#"', $html );
 
 		if ( ! preg_match( '/^\s*<!doctype html>/i', $html ) ) {
 			$html = '<!doctype html><html><head><meta charset="utf-8"><title>AttackIQ INFORM Assessment Report</title></head><body>' . $html . '</body></html>';
+		}
+
+		$csp = '<meta http-equiv="Content-Security-Policy" content="default-src &apos;none&apos;; style-src &apos;unsafe-inline&apos; https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data:; base-uri &apos;none&apos;; form-action &apos;none&apos;">';
+		if ( false === stripos( $html, 'http-equiv="Content-Security-Policy"' ) ) {
+			if ( false !== stripos( $html, '</head>' ) ) {
+				$html = preg_replace( '#</head>#i', $csp . '</head>', $html, 1 );
+			} else {
+				$html = preg_replace( '#<html\b[^>]*>#i', '$0<head><meta charset="utf-8">' . $csp . '</head>', $html, 1 );
+			}
 		}
 
 		return $html;
@@ -147,6 +168,7 @@ class AIQ_Inform_Assessment {
 		}
 
 		$path = defined( 'COOKIEPATH' ) && COOKIEPATH ? COOKIEPATH : '/';
+		$path = preg_replace( '/[;\r\n]/', '', $path );
 		$cookie = sprintf(
 			'%s=complete; Max-Age=120; Path=%s; SameSite=Lax%s',
 			rawurlencode( 'aiq_pdf_download_' . $download_token ),
@@ -203,6 +225,9 @@ class AIQ_Inform_Assessment {
 			'--headless=new',
 			'--disable-gpu',
 			'--disable-dev-shm-usage',
+			'--disable-extensions',
+			'--disable-sync',
+			'--no-first-run',
 			'--no-sandbox',
 			'--no-pdf-header-footer',
 			'--run-all-compositor-stages-before-draw',

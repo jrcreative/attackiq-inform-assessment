@@ -101,6 +101,10 @@ export const submitResults = async (answers, result, context = {}) => {
             body: JSON.stringify(payload),
         });
 
+        if (!response.ok) {
+            throw new Error(`Submission failed with HTTP ${response.status}`);
+        }
+
         const body = await response.json();
         return body.success === true;
     } catch (err) {

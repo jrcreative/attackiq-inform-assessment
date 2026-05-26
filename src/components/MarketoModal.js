@@ -16,6 +16,8 @@ const MarketoModal = ({
 
     const marketoConfig = window.aiqInformData?.marketo || {};
     const { formId, instance, munchkinId } = marketoConfig;
+    const marketoHost = /^[a-z0-9.-]+$/i.test(instance || '') ? instance : '';
+    const marketoFormId = parseInt(formId, 10);
 
     useEffect(() => {
         if (!isOpen || !formId) return;
@@ -26,13 +28,22 @@ const MarketoModal = ({
 
         const loadMarketoScript = () => {
             return new Promise((resolve, reject) => {
+                if (!marketoHost) {
+                    reject(new Error('Invalid Marketo host'));
+                    return;
+                }
+                if (!Number.isFinite(marketoFormId)) {
+                    reject(new Error('Invalid Marketo form ID'));
+                    return;
+                }
+
                 if (window.MktoForms2) {
                     resolve();
                     return;
                 }
 
                 const script = document.createElement('script');
-                script.src = `https://${instance}/js/forms2/js/forms2.min.js`;
+                script.src = `https://${marketoHost}/js/forms2/js/forms2.min.js`;
                 script.async = true;
                 script.onload = resolve;
                 script.onerror = () => reject(new Error('Failed to load Marketo script'));
@@ -46,12 +57,15 @@ const MarketoModal = ({
 
                 setTimeout(() => {
                     if (window.MktoForms2 && formContainerRef.current) {
-                        formContainerRef.current.innerHTML = `<form id="mktoForm_${formId}"></form>`;
+                        formContainerRef.current.replaceChildren();
+                        const formEl = document.createElement('form');
+                        formEl.id = `mktoForm_${marketoFormId}`;
+                        formContainerRef.current.appendChild(formEl);
 
                         window.MktoForms2.loadForm(
-                            `//${instance}`,
+                            `//${marketoHost}`,
                             munchkinId,
-                            parseInt(formId, 10),
+                            marketoFormId,
                             (form) => {
                                 setIsLoading(false);
 
@@ -87,7 +101,6 @@ const MarketoModal = ({
 
                                     try {
                                         form.setValues(hiddenValues);
-                                        console.log('Assessment data set for Salesforce sync:', hiddenValues);
                                     } catch (err) {
                                         console.log('Some hidden fields may not exist in Marketo form:', err);
                                     }
@@ -133,7 +146,7 @@ const MarketoModal = ({
         };
 
         initializeForm();
-    }, [isOpen, formId, instance, munchkinId, onSuccess, assessmentData, downloadType]);
+    }, [isOpen, formId, marketoHost, marketoFormId, munchkinId, onSuccess, assessmentData, downloadType]);
 
     useEffect(() => {
         const handleEsc = (e) => {

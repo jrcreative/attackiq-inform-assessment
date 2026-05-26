@@ -132,7 +132,7 @@ const ImpactComplexityMatrix = ({ results }) => {
                 </div>
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .aiq-matrix-container {
                     margin: 40px 0;
                 }
