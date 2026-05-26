@@ -6,55 +6,10 @@ import RadarChart from './RadarChart';
 import ImpactComplexityMatrix from './ImpactComplexityMatrix';
 import { generatePDF } from '../utils/pdfGenerator';
 import { generateMitreJSON } from '../utils/jsonGenerator';
-import { submitResults } from '../utils/api';
+import { submitResults, buildThreatProfile } from '../utils/api';
+import { buildRecommendationGroups } from '../utils/recommendationEngine';
+import HistoricalUpload from './HistoricalUpload';
 import MarketoModal from './MarketoModal';
-
-const groupDataBySection = (flatData) => {
-    const sections = ['CTI', 'DM', 'TE'];
-    const grouped = {};
-    sections.forEach(sec => {
-        grouped[sec] = flatData.filter(item => item['Dimension ID'] === sec);
-    });
-    return grouped;
-};
-
-const consolidateQuestions = (rawData) => {
-    const questionsMap = {};
-    rawData.forEach(row => {
-        const componentKey = `${row['Dimension ID']}.${row['Component ID']}`;
-
-        if (!questionsMap[componentKey]) {
-            questionsMap[componentKey] = {
-                componentKey,
-                Component: row.Component,
-                Question: row.Question,
-                'Question Type': row['Question Type'],
-                'Dimension ID': row['Dimension ID'],
-                Dimension: row.Dimension,
-                'Component ID': row['Component ID'],
-                'Component Weight': row['Component Weight'],
-                'Dimension Weight': row['Dimension Weight'],
-                choices: []
-            };
-        }
-
-        questionsMap[componentKey].choices.push({
-            uid: row.UID,
-            description: row['Level Description'],
-            points: row.Points,
-            impact: row.Impact,
-            complexity: row.Complexity,
-            tooltip: row['Level Tooltip'],
-            levelId: row['Level ID']
-        });
-    });
-
-    Object.values(questionsMap).forEach(q => {
-        q.choices.sort((a, b) => a.levelId - b.levelId);
-    });
-
-    return Object.values(questionsMap);
-};
 
 const BRAND_COLORS = {
     primary: '#40008f',
@@ -68,14 +23,34 @@ const BRAND_COLORS = {
     textLight: '#65616b'
 };
 
+const SECTION_VISUALS = {
+    CTI:  { tab: '#ffcc00',           bg: '#ffcc00', text: '#000', label: 'CTI'  },
+    DM:   { tab: '#36bae4',           bg: '#36bae4', text: '#000', label: 'DM'   },
+    TE:   { tab: '#f02c68',           bg: '#f02c68', text: '#fff', label: 'TE'   },
+    CTEM: { tab: '#7b3ff2',           bg: '#7b3ff2', text: '#fff', label: 'CTEM' },
+    TP:   { tab: BRAND_COLORS.accent, bg: BRAND_COLORS.accent, text: '#fff', label: 'TP' }
+};
+
+const SECTION_TAB_LABELS = {
+    CTI:  'Cyber Threat Intelligence',
+    DM:   'Defensive Measures',
+    TE:   'Test & Evaluation',
+    CTEM: 'CTEM',
+    TP:   'Threat Profile'
+};
+
+const RESULTS_STEP_KEY = 'RESULTS';
+const isSectionEntry = (entry) => Boolean(entry && entry.section_id && Array.isArray(entry.questions));
+
 const WizardWrapper = () => {
     const { state, dispatch } = useAssessment();
-    const { step, data, answers } = state;
+    const { step, data, answers, ctemSkipped } = state;
     const [isGenerating, setIsGenerating] = useState(false);
     const [showMarketoModal, setShowMarketoModal] = useState(false);
     const [pendingDownloadType, setPendingDownloadType] = useState(null);
     const [userEmail, setUserEmail] = useState(null);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [historicalResults, setHistoricalResults] = useState([]);
     const wizardHeaderRef = useRef(null);
     const containerRef = useRef(null);
     const isInitialMount = useRef(true);
@@ -85,7 +60,23 @@ const WizardWrapper = () => {
     const gateDownloads = marketoConfig.gateDownloads && marketoConfig.formId;
     const ctaUrl = config.contactUrl || '';
     const ctaText = config.contactButtonText || 'Improve Your Score';
-    const siteUrl = config.siteUrl || '';
+
+    const sectionEntries = useMemo(
+        () => (Array.isArray(data) ? data.filter(isSectionEntry) : []),
+        [data]
+    );
+
+    const sections = useMemo(() => {
+        const ids = sectionEntries.map(s => s.section_id);
+        return [...ids, RESULTS_STEP_KEY];
+    }, [sectionEntries]);
+
+    const totalSteps = sections.length;
+    const lastQuestionStep = totalSteps - 1;
+    const isResultsStep = step === lastQuestionStep;
+    const currentSectionKey = sections[step];
+    const currentSection = sectionEntries.find(s => s.section_id === currentSectionKey);
+    const currentQuestions = currentSection ? currentSection.questions : [];
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -180,17 +171,11 @@ const WizardWrapper = () => {
         return () => document.removeEventListener('click', handleClickOutside);
     }, [showDownloadMenu]);
 
-    const structuredData = useMemo(() => {
-        if (!data || !Array.isArray(data)) return {};
-        const allQuestions = consolidateQuestions(data);
-        return groupDataBySection(allQuestions);
-    }, [data]);
-
-    const sections = ['CTI', 'DM', 'TE', 'RESULTS'];
-    const currentSectionKey = sections[step];
-    const currentQuestions = structuredData[currentSectionKey] || [];
-
-    const results = step === 3 ? processResults(data, answers) : null;
+    const results = isResultsStep ? processResults(data, answers, { ctemSkipped }) : null;
+    const recommendationGroups = useMemo(
+        () => (results ? buildRecommendationGroups(data, answers, { ctemSkipped }) : []),
+        [results, data, answers, ctemSkipped]
+    );
 
     const getOverallLevel = (score) => {
         if (score < 0) return -1;
@@ -206,21 +191,21 @@ const WizardWrapper = () => {
     const overallScoreLabel = getScoreLabel(overallScoreLevel);
 
     const handleNext = async () => {
-        if (step === 2) {
-            const results = processResults(data, answers);
 
-            submitResults(answers, results).then(success => {
+        if (step === lastQuestionStep - 1) {
+            const finalResults = processResults(data, answers, { ctemSkipped });
+            const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
+
+            submitResults(answers, finalResults, {
+                data,
+                ctemSkipped,
+                lead: userEmail ? { email: userEmail } : {},
+                recommendations: recs,
+            }).then(success => {
                 if (success) console.log('Results Saved!');
             });
-
-            dispatch({ type: 'NEXT_STEP' });
-        } else {
-            dispatch({ type: 'NEXT_STEP' });
         }
-    };
-
-    const handlePrev = () => {
-        dispatch({ type: 'PREV_STEP' });
+        dispatch({ type: 'NEXT_STEP' });
     };
 
     const downloadPDF = useCallback(async () => {
@@ -230,20 +215,22 @@ const WizardWrapper = () => {
                 results,
                 overallLevel: overallScoreLevel,
                 overallLabel: overallScoreLabel,
-                calculateSectionScore
+                calculateSectionScore,
+                recommendationGroups,
+                threatProfile: buildThreatProfile(data, answers),
             });
         } catch (err) {
             console.error('PDF generation error:', err);
         }
         setIsGenerating(false);
         setShowDownloadMenu(false);
-    }, [results, overallScoreLevel, overallScoreLabel]);
+    }, [results, overallScoreLevel, overallScoreLabel, recommendationGroups]);
 
     const downloadJSON = useCallback(() => {
         if (!results || !data) return;
 
         try {
-            const jsonData = generateMitreJSON(data, answers, results);
+            const jsonData = generateMitreJSON(data, answers, { ctemSkipped });
             const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -257,7 +244,7 @@ const WizardWrapper = () => {
             console.error('JSON generation error:', err);
         }
         setShowDownloadMenu(false);
-    }, [results, data, answers]);
+    }, [results, data, answers, ctemSkipped]);
 
     const handleDownloadRequest = (type) => {
         if (gateDownloads && !userEmail) {
@@ -290,25 +277,96 @@ const WizardWrapper = () => {
         }, 500);
     };
 
-    const sectionLabels = {
-        'CTI': '1. Cyber Threat Intelligence',
-        'DM': '2. Defensive Measures',
-        'TE': '3. Test & Evaluation',
-        'RESULTS': '4. Results'
+    const visibleScoredSections = (results?.scoresBySection || []).filter(s => s.scored);
+
+    const renderSectionTabLabel = (sec, idx) => {
+        if (sec === RESULTS_STEP_KEY) return `${idx + 1}. Results`;
+        const labelText = SECTION_TAB_LABELS[sec] || sec;
+        return `${idx + 1}. ${labelText}`;
     };
+
+    const renderCtemSkipBanner = () => {
+        if (currentSectionKey !== 'CTEM') return null;
+        return (
+            <div
+                className="aiq-ctem-skip-banner"
+                style={{
+                    gridColumn: '1 / -1',
+                    marginBottom: '24px',
+                    padding: '16px 18px',
+                    background: ctemSkipped ? '#f5f5f5' : '#f8f5fc',
+                    border: `1px solid ${ctemSkipped ? '#ddd' : '#e2d4f1'}`,
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                }}
+            >
+                <input
+                    id="aiq-ctem-skip-checkbox"
+                    type="checkbox"
+                    checked={ctemSkipped}
+                    onChange={(e) => dispatch({ type: 'SET_CTEM_SKIPPED', value: e.target.checked })}
+                    style={{ marginTop: '4px', accentColor: BRAND_COLORS.primary }}
+                />
+                <label htmlFor="aiq-ctem-skip-checkbox" style={{ flex: 1, cursor: 'pointer', fontSize: '14px', lineHeight: '1.5', color: BRAND_COLORS.text }}>
+                    <strong>Skip CTEM Assessment.</strong>{' '}
+                    Exclude CTEM from your overall maturity score, the impact / complexity matrix, recommendations, and the radar chart. Useful if your organisation does not yet treat CTEM as a distinct discipline.
+                </label>
+            </div>
+        );
+    };
+
+    const renderCtemSkippedNote = () => (
+        <div
+            style={{
+                gridColumn: '1 / -1',
+                padding: '32px',
+                background: '#f8f8f8',
+                border: '1px dashed #ccc',
+                borderRadius: '6px',
+                color: BRAND_COLORS.textLight,
+                fontSize: '14px',
+                lineHeight: '1.6'
+            }}
+        >
+            CTEM has been excluded from your assessment. Uncheck <em>Skip CTEM Assessment</em> above if you want to answer this section and have it factor into your maturity score.
+        </div>
+    );
+
+    const renderPdfLoader = () => (
+        <div className="aiq-pdf-loader-overlay" role="status" aria-live="polite" aria-label="Generating PDF report">
+            <div className="aiq-pdf-loader-card">
+                <div className="aiq-pdf-loader-mark" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div className="aiq-pdf-loader-copy">
+                    <p className="aiq-pdf-loader-kicker">Building PDF report</p>
+                    <h2>Preparing your INFORM assessment</h2>
+                </div>
+                <div className="aiq-pdf-loader-rail" aria-hidden="true">
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="aiq-assessment-container" ref={containerRef}>
+            {isGenerating && renderPdfLoader()}
             <div className="aiq-wizard-header" ref={wizardHeaderRef}>
                 <ul className="aiq-steps-nav">
                     {sections.map((sec, idx) => {
-                        const stepColors = [BRAND_COLORS.primary, '#36bae4', '#f02c68', BRAND_COLORS.primaryDark];
+                        const visuals = SECTION_VISUALS[sec];
+                        const tabAccent = visuals ? visuals.tab : BRAND_COLORS.primaryDark;
                         const isActive = idx === step;
                         const isCompleted = idx < step;
 
                         let tabStyle = {};
                         if (isActive) {
-                            tabStyle = { borderBottomColor: stepColors[idx], color: '#000' };
+                            tabStyle = { borderBottomColor: tabAccent, color: '#000' };
                         } else {
                             tabStyle = { color: isCompleted ? BRAND_COLORS.primary : '#666', cursor: 'pointer' };
                         }
@@ -316,9 +374,15 @@ const WizardWrapper = () => {
                         const handleTabClick = () => {
                             if (idx === step) return;
 
-                            if (idx === 3 && step < 3) {
-                                const results = processResults(data, answers);
-                                submitResults(answers, results).then(success => {
+                            if (idx === lastQuestionStep && step < lastQuestionStep) {
+                                const finalResults = processResults(data, answers, { ctemSkipped });
+                                const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
+                                submitResults(answers, finalResults, {
+                                    data,
+                                    ctemSkipped,
+                                    lead: userEmail ? { email: userEmail } : {},
+                                    recommendations: recs,
+                                }).then(success => {
                                     if (success) console.log('Results Saved!');
                                 });
                             }
@@ -333,7 +397,7 @@ const WizardWrapper = () => {
                                 style={tabStyle}
                                 onClick={handleTabClick}
                             >
-                                {sectionLabels[sec]}
+                                {renderSectionTabLabel(sec, idx)}
                             </li>
                         );
                     })}
@@ -344,16 +408,19 @@ const WizardWrapper = () => {
             </div>
 
             <div className="aiq-wizard-content">
-                {step < 3 ? (
+                {!isResultsStep ? (
                     <div className="aiq-wizard-step">
-                        {currentQuestions.map(q => (
-                            <QuestionBlock
-                                key={q.componentKey}
-                                question={q}
-                                dispatch={dispatch}
-                                currentAnswer={answers[q.componentKey]}
-                            />
-                        ))}
+                        {renderCtemSkipBanner()}
+                        {currentSectionKey === 'CTEM' && ctemSkipped ? (
+                            renderCtemSkippedNote()
+                        ) : (
+                            currentQuestions.map(q => (
+                                <QuestionBlock
+                                    key={q.uid || q.componentKey}
+                                    question={q}
+                                />
+                            ))
+                        )}
                     </div>
                 ) : results ? (
                     <div id="aiq-results-print-area" className="aiq-results-container">
@@ -386,6 +453,11 @@ const WizardWrapper = () => {
                                         month: 'long',
                                         day: 'numeric'
                                     })}
+                                    {ctemSkipped && (
+                                        <span style={{ marginLeft: '10px', fontStyle: 'italic', color: '#e5dfec' }}>
+                                            · CTEM excluded from scoring
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                             <div style={{ textAlign: 'center' }}>
@@ -414,21 +486,15 @@ const WizardWrapper = () => {
                                 Score Breakdown
                             </h3>
 
-                            {results.scoresBySection && results.scoresBySection.map((section) => {
-                                const sectionColors = {
-                                    'CTI': { bg: '#ffcc00', text: '#000', label: 'CTI' },
-                                    'DM': { bg: '#36bae4', text: '#000', label: 'DM' },
-                                    'TE': { bg: '#f02c68', text: '#fff', label: 'TE' }
-                                };
-                                const colorScheme = sectionColors[section.section_id] || { bg: '#ccc', text: '#000', label: section.section_id };
-
+                            {visibleScoredSections.map((section) => {
+                                const visuals = SECTION_VISUALS[section.section_id] || { bg: '#ccc', text: '#000', label: section.section_id };
                                 const sectionScore = calculateSectionScore(section);
 
                                 return (
                                     <div key={section.section_id} style={{ marginBottom: '15px' }}>
-                                        <div style={{
-                                            background: colorScheme.bg,
-                                            color: colorScheme.text,
+                                        <div className={`aiq-section-${(section.section_id || '').toLowerCase()}`} style={{
+                                            background: visuals.bg,
+                                            color: visuals.text,
                                             padding: '8px 14px',
                                             fontWeight: '700',
                                             fontSize: '13px',
@@ -438,7 +504,7 @@ const WizardWrapper = () => {
                                             alignItems: 'center',
                                             borderRadius: '4px'
                                         }}>
-                                            <span>{colorScheme.label} - {section.name}</span>
+                                            <span>{visuals.label} - {section.shortname || section.name}</span>
                                             <span style={{
                                                 background: 'rgba(255,255,255,0.2)',
                                                 padding: '2px 10px',
@@ -496,6 +562,7 @@ const WizardWrapper = () => {
                                                     </span>
                                                 );
 
+                                                const headingText = q.heading || '';
                                                 return (
                                                     <div key={q.uid} style={{
                                                         display: 'flex',
@@ -504,7 +571,7 @@ const WizardWrapper = () => {
                                                         borderBottom: '1px solid #f0f0f0'
                                                     }}>
                                                         <span style={{ flex: 1, paddingRight: '10px', color: isNA ? '#bbb' : BRAND_COLORS.textLight, fontStyle: isNA ? 'italic' : 'normal' }}>
-                                                            {q.uid} - {q.heading.substring(0, 45)}{q.heading.length > 45 ? '...' : ''}
+                                                            {q.uid} - {headingText.substring(0, 45)}{headingText.length > 45 ? '...' : ''}
                                                         </span>
                                                         <span style={{
                                                             fontWeight: '600',
@@ -589,70 +656,83 @@ const WizardWrapper = () => {
                         </div>
 
                         <div className="aiq-results-right">
-                            <div id="aiq-radar-chart-container" style={{
-                                width: '100%',
-                                maxWidth: '450px',
-                                margin: '0 auto 30px'
-                            }}>
-                                <RadarChart scores={results} />
-                            </div>
                             <div id="aiq-matrix-container">
                                 <ImpactComplexityMatrix results={results} />
                             </div>
 
-                            {ctaUrl && (
-                                <div className="aiq-cta-section" style={{
-                                    marginTop: '30px',
-                                    padding: '25px',
-                                    background: `linear-gradient(135deg, ${BRAND_COLORS.primary} 0%, ${BRAND_COLORS.primaryDark} 100%)`,
-                                    borderRadius: '8px',
-                                    textAlign: 'center'
-                                }}>
-                                    <h3 style={{
-                                        margin: '0 0 10px 0',
-                                        fontSize: '18px',
-                                        fontWeight: '700',
-                                        color: '#ffffff'
+                            <div id="aiq-radar-chart-container" style={{
+                                width: '100%',
+                                maxWidth: '450px',
+                                margin: '30px auto 30px'
+                            }}>
+                                <RadarChart scores={results} historical={historicalResults} />
+                            </div>
+
+                            {historicalResults.length > 0 && (
+                                <div className="aiq-historical-table-wrapper" style={{ marginTop: '20px', overflowX: 'auto' }}>
+                                    <h4 style={{ fontSize: '14px', margin: '0 0 10px 0', color: BRAND_COLORS.navy, fontWeight: '700' }}>
+                                        Score Comparison
+                                    </h4>
+                                    <table style={{
+                                        width: '100%',
+                                        borderCollapse: 'collapse',
+                                        fontSize: '12px',
+                                        background: '#fff',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: '4px',
+                                        overflow: 'hidden'
                                     }}>
-                                        Ready to Improve Your Security Posture?
-                                    </h3>
-                                    <p style={{
-                                        margin: '0 0 20px 0',
-                                        fontSize: '14px',
-                                        color: '#e5dfec',
-                                        lineHeight: '1.5'
-                                    }}>
-                                        Our experts can help you strengthen your threat-informed defense capabilities.
-                                    </p>
-                                    <a
-                                        href={ctaUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="aiq-cta-button"
-                                        style={{
-                                            display: 'inline-block',
-                                            padding: '12px 30px',
-                                            background: '#ffffff',
-                                            color: BRAND_COLORS.primary,
-                                            textDecoration: 'none',
-                                            fontWeight: '700',
-                                            fontSize: '14px',
-                                            borderRadius: '6px',
-                                            transition: 'transform 0.2s, box-shadow 0.2s',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px'
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.transform = 'translateY(-2px)';
-                                            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.transform = 'translateY(0)';
-                                            e.target.style.boxShadow = 'none';
-                                        }}
-                                    >
-                                        {ctaText}
-                                    </a>
+                                        <thead>
+                                            <tr style={{ background: BRAND_COLORS.background }}>
+                                                <th style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'left' }}>Section</th>
+                                                {historicalResults.map((rec, idx) => {
+                                                    const date = rec.downloadedDate ? new Date(rec.downloadedDate) : null;
+                                                    const label = date && !Number.isNaN(date.getTime())
+                                                        ? date.toLocaleDateString()
+                                                        : `Previous ${idx + 1}`;
+                                                    return (
+                                                        <th key={idx} style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'center' }}>
+                                                            {label}
+                                                        </th>
+                                                    );
+                                                })}
+                                                <th style={{ padding: '8px 10px', borderBottom: '1px solid #e0e0e0', textAlign: 'center', background: BRAND_COLORS.primary, color: '#fff' }}>Today</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {results.scoresBySection.filter(s => s.scored).map(section => {
+                                                const todaysLevel = calculateSectionScore(section);
+                                                return (
+                                                    <tr key={section.section_id}>
+                                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', fontWeight: '600' }}>
+                                                            {section.shortname || section.section_id}
+                                                        </td>
+                                                        {historicalResults.map((rec, idx) => {
+                                                            const match = (rec.sections || []).find(s => s.section_id === section.section_id);
+                                                            let display = '—';
+                                                            if (match && !match.missing) {
+                                                                if (typeof match.ratio === 'number') {
+                                                                    display = (match.ratio * 5).toFixed(1);
+                                                                } else if (typeof match.totalPoints === 'number' && match.possiblePoints) {
+                                                                    display = ((match.totalPoints / match.possiblePoints) * 5).toFixed(1);
+                                                                } else if (typeof match.totalPoints === 'number') {
+                                                                    display = match.totalPoints;
+                                                                }
+                                                            }
+                                                            return (
+                                                                <td key={idx} style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: display === '—' ? '#bbb' : BRAND_COLORS.text }}>
+                                                                    {display}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', fontWeight: '700', color: BRAND_COLORS.primary }}>
+                                                            {todaysLevel < 0 ? '—' : todaysLevel}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )}
                         </div>
@@ -666,7 +746,7 @@ const WizardWrapper = () => {
 
             <div className="aiq-wizard-footer">
                 <div>
-                    {step === 3 ? (
+                    {isResultsStep ? (
                         <button
                             className="aiq-btn aiq-btn-secondary"
                             onClick={() => dispatch({ type: 'RESET' })}
@@ -685,8 +765,8 @@ const WizardWrapper = () => {
                         </button>
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    {step < sections.length - 1 ? (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    {!isResultsStep ? (
                         <button
                             className="aiq-btn aiq-btn-primary"
                             onClick={handleNext}
@@ -694,7 +774,9 @@ const WizardWrapper = () => {
                             NEXT &nbsp; →
                         </button>
                     ) : (
-                        <div className="aiq-download-dropdown" style={{ position: 'relative' }}>
+                        <>
+                        <HistoricalUpload compact data={data} onChange={setHistoricalResults} />
+                        <div className="aiq-download-dropdown" style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'stretch' }}>
                             <button
                                 className="aiq-btn aiq-btn-primary"
                                 onClick={(e) => {
@@ -702,7 +784,7 @@ const WizardWrapper = () => {
                                     setShowDownloadMenu(!showDownloadMenu);
                                 }}
                                 disabled={isGenerating}
-                                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
                                 {isGenerating ? (
                                     <>
@@ -744,7 +826,21 @@ const WizardWrapper = () => {
                                     </button>
                                 </div>
                             )}
+                            {recommendationGroups.length > 0 && (
+                                <span style={{
+                                    display: 'block',
+                                    marginTop: '6px',
+                                    fontSize: '10px',
+                                    color: BRAND_COLORS.textLight,
+                                    fontStyle: 'italic',
+                                    lineHeight: '1.3',
+                                    textAlign: 'center'
+                                }}>
+                                    PDF includes tailored recommendations &amp; next steps
+                                </span>
+                            )}
                         </div>
+                        </>
                     )}
                 </div>
             </div>
@@ -770,7 +866,14 @@ const WizardWrapper = () => {
                     teScore: results.scoresBySection?.find(s => s.section_id === 'TE')
                         ? calculateSectionScore(results.scoresBySection.find(s => s.section_id === 'TE'))
                         : 0,
-                    jsonData: generateMitreJSON(data, answers, results),
+                    ctemScore: ctemSkipped ? null : (
+                        results.scoresBySection?.find(s => s.section_id === 'CTEM')
+                            ? calculateSectionScore(results.scoresBySection.find(s => s.section_id === 'CTEM'))
+                            : 0
+                    ),
+                    ctemSkipped,
+                    threatProfile: buildThreatProfile(data, answers),
+                    jsonData: generateMitreJSON(data, answers, { ctemSkipped }),
                     assessmentDate: new Date().toISOString(),
                     leadSource: 'INFORM Assessment - AttackIQ Website'
                 } : null}

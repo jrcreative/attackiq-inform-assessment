@@ -20,6 +20,10 @@ const ImpactComplexityMatrix = ({ results }) => {
         'TE': {
             highest: { bg: '#f02c68', border: '#d41e56', text: '#fff' },
             selected: { bg: '#fdd6e3', border: '#d41e56', text: '#a01040' },
+        },
+        'CTEM': {
+            highest: { bg: '#7b3ff2', border: '#5a23bf', text: '#fff' },
+            selected: { bg: '#ece1ff', border: '#5a23bf', text: '#3f1d8a' },
         }
     };
 
@@ -28,7 +32,7 @@ const ImpactComplexityMatrix = ({ results }) => {
         const items = results.impactComplexityMap.get(key) || [];
 
         return items.map((item, idx) => {
-            const section = (item.componentKey || '').split('.')[0];
+            const section = item.section_id || (item.componentKey || '').split('.')[0];
             const colors = sectionColorMap[section] || sectionColorMap['CTI'];
 
             let bgColor = '#fff';
@@ -128,7 +132,7 @@ const ImpactComplexityMatrix = ({ results }) => {
                 </div>
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .aiq-matrix-container {
                     margin: 40px 0;
                 }
@@ -178,7 +182,7 @@ const ImpactComplexityMatrix = ({ results }) => {
                 }
                 /* Quadrant Colors (Optional) */
                 .cell-i3-c1 { background: rgba(255, 77, 77, 0.1); } /* High Impact, Low Complexity (Quick Wins) */
-                
+
                 .aiq-matrix-item {
                     font-size: 11px;
                     background: #eee;
@@ -270,7 +274,8 @@ const ImpactComplexityMatrix = ({ results }) => {
                             {[
                                 { bg: '#ffcc00', text: '#000', label: '✓ CTI' },
                                 { bg: '#36bae4', text: '#000', label: '✓ DM' },
-                                { bg: '#f02c68', text: '#fff', label: '✓ TE' }
+                                { bg: '#f02c68', text: '#fff', label: '✓ TE' },
+                                { bg: '#7b3ff2', text: '#fff', label: '✓ CTEM' }
                             ].map(c => (
                                 <div key={c.label} style={{
                                     display: 'inline-flex',
@@ -295,7 +300,8 @@ const ImpactComplexityMatrix = ({ results }) => {
                             {[
                                 { bg: '#fff3cc', border: '#e6b800', text: '#8a6d00', label: 'CTI' },
                                 { bg: '#d6f0fa', border: '#2a9bbf', text: '#1a6e8a', label: 'DM' },
-                                { bg: '#fdd6e3', border: '#d41e56', text: '#a01040', label: 'TE' }
+                                { bg: '#fdd6e3', border: '#d41e56', text: '#a01040', label: 'TE' },
+                                { bg: '#ece1ff', border: '#5a23bf', text: '#3f1d8a', label: 'CTEM' }
                             ].map(c => (
                                 <div key={c.label} style={{
                                     display: 'inline-flex',

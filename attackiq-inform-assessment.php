@@ -1,13 +1,28 @@
 <?php
+/**
+ * Plugin Name: AttackIQ Inform Assessment
+ * Description: Interactive Inform Assessment tool built with React.
+ * Version: 1.2.0
+ * Author: Volume11
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-db.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-migrate.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-auth.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-submission.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-api.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin-list.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-aiq-admin.php';
+
+register_activation_hook( __FILE__, array( 'AIQ_DB', 'install' ) );
 
 class AIQ_Inform_Assessment {
+
+	const PDF_MAX_HTML_BYTES = 4000000;
 
 	private $default_marketo_form_id = '';
 	private $default_marketo_instance = 'app-ab33.marketo.com';
@@ -15,9 +30,236 @@ class AIQ_Inform_Assessment {
 
 	public function __construct() {
 		add_action( 'init', array( $this, 'register_scripts' ) );
+		add_action( 'init', array( 'AIQ_DB', 'maybe_upgrade' ) );
 		add_shortcode( 'inform_assessment', array( $this, 'render_shortcode' ) );
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_post_aiq_generate_api_key', array( $this, 'handle_generate_api_key' ) );
+		add_action( 'admin_post_aiq_revoke_api_key', array( $this, 'handle_revoke_api_key' ) );
+		add_action( 'admin_post_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
+		add_action( 'admin_post_nopriv_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
+	}
+
+	public function handle_generate_api_key() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions', 'attackiq-inform-assessment' ) );
+		}
+		check_admin_referer( 'aiq_generate_api_key' );
+		AIQ_Auth::generate_and_store();
+		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
+		exit;
+	}
+
+	public function handle_revoke_api_key() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions', 'attackiq-inform-assessment' ) );
+		}
+		check_admin_referer( 'aiq_revoke_api_key' );
+		AIQ_Auth::revoke();
+		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
+		exit;
+	}
+
+	public function handle_generate_pdf() {
+		check_admin_referer( 'aiq_generate_pdf' );
+
+		$html = isset( $_POST['html'] ) ? wp_unslash( $_POST['html'] ) : '';
+		if ( empty( $html ) ) {
+			wp_die( esc_html__( 'Missing report HTML.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
+		}
+		if ( strlen( $html ) > self::PDF_MAX_HTML_BYTES ) {
+			wp_die( esc_html__( 'Report HTML is too large to render.', 'attackiq-inform-assessment' ), '', array( 'response' => 413 ) );
+		}
+		if ( false === strpos( $html, 'aiq-pdf-render-root' ) ) {
+			wp_die( esc_html__( 'Invalid report payload.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
+		}
+
+		$filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : 'AttackIQ-INFORM-Assessment-Report.pdf';
+		if ( '.pdf' !== substr( strtolower( $filename ), -4 ) ) {
+			$filename .= '.pdf';
+		}
+		$download_token = isset( $_POST['download_token'] ) ? sanitize_key( wp_unslash( $_POST['download_token'] ) ) : '';
+
+		$html = $this->prepare_pdf_html( $html );
+
+		$html_file = $this->create_pdf_temp_file( 'aiq-inform-report', 'html' );
+		$pdf_file  = $this->create_pdf_temp_file( 'aiq-inform-report', 'pdf' );
+
+		if ( ! $html_file || ! $pdf_file ) {
+			wp_die( esc_html__( 'Unable to create temporary PDF files.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		file_put_contents( $html_file, $html );
+
+		$chromium = $this->locate_chromium();
+		if ( ! $chromium ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html__( 'Chromium was not found on the server. Set AIQ_INFORM_CHROMIUM_PATH or install chromium/google-chrome.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		$result = $this->render_pdf_with_chromium( $chromium, $html_file, $pdf_file );
+		if ( is_wp_error( $result ) ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html( $result->get_error_message() ), '', array( 'response' => 500 ) );
+		}
+
+		if ( ! file_exists( $pdf_file ) || filesize( $pdf_file ) < 1000 ) {
+			@unlink( $html_file );
+			@unlink( $pdf_file );
+			wp_die( esc_html__( 'Chromium did not produce a readable PDF.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		}
+
+		nocache_headers();
+		$this->set_pdf_download_cookie( $download_token );
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $pdf_file ) );
+		readfile( $pdf_file );
+
+		@unlink( $html_file );
+		@unlink( $pdf_file );
+		exit;
+	}
+
+	private function prepare_pdf_html( $html ) {
+		$html = preg_replace( '#<script\b[^>]*>.*?</script>#is', '', $html );
+		$html = preg_replace( '#<(iframe|object|embed)\b[^>]*>.*?</\1>#is', '', $html );
+		$html = preg_replace( '#<(link|base)\b[^>]*>#is', '', $html );
+		$html = preg_replace( '#<meta\b[^>]*http-equiv\s*=\s*["\']?refresh["\']?[^>]*>#is', '', $html );
+		$html = preg_replace( '/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/is', '', $html );
+		$html = preg_replace( '/(href|src)\s*=\s*(["\'])\s*(javascript:|file:)[^"\']*\2/is', '$1="#"', $html );
+
+		if ( ! preg_match( '/^\s*<!doctype html>/i', $html ) ) {
+			$html = '<!doctype html><html><head><meta charset="utf-8"><title>AttackIQ INFORM Assessment Report</title></head><body>' . $html . '</body></html>';
+		}
+
+		$csp = '<meta http-equiv="Content-Security-Policy" content="default-src &apos;none&apos;; style-src &apos;unsafe-inline&apos; https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data:; base-uri &apos;none&apos;; form-action &apos;none&apos;">';
+		if ( false === stripos( $html, 'http-equiv="Content-Security-Policy"' ) ) {
+			if ( false !== stripos( $html, '</head>' ) ) {
+				$html = preg_replace( '#</head>#i', $csp . '</head>', $html, 1 );
+			} else {
+				$html = preg_replace( '#<html\b[^>]*>#i', '$0<head><meta charset="utf-8">' . $csp . '</head>', $html, 1 );
+			}
+		}
+
+		return $html;
+	}
+
+	private function create_pdf_temp_file( $prefix, $extension ) {
+		$base = wp_tempnam( $prefix );
+		if ( ! $base ) {
+			return false;
+		}
+
+		$path = $base . '.' . ltrim( $extension, '.' );
+		if ( ! @rename( $base, $path ) ) {
+			@unlink( $base );
+			return false;
+		}
+
+		return $path;
+	}
+
+	private function set_pdf_download_cookie( $download_token ) {
+		if ( empty( $download_token ) || headers_sent() ) {
+			return;
+		}
+
+		$path = defined( 'COOKIEPATH' ) && COOKIEPATH ? COOKIEPATH : '/';
+		$path = preg_replace( '/[;\r\n]/', '', $path );
+		$cookie = sprintf(
+			'%s=complete; Max-Age=120; Path=%s; SameSite=Lax%s',
+			rawurlencode( 'aiq_pdf_download_' . $download_token ),
+			$path,
+			is_ssl() ? '; Secure' : ''
+		);
+
+		header( 'Set-Cookie: ' . $cookie, false );
+	}
+
+	private function locate_chromium() {
+		$candidates = array_filter( apply_filters( 'aiq_inform_chromium_paths', array(
+			defined( 'AIQ_INFORM_CHROMIUM_PATH' ) ? AIQ_INFORM_CHROMIUM_PATH : null,
+			getenv( 'AIQ_INFORM_CHROMIUM_PATH' ),
+			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+			'/Applications/Chromium.app/Contents/MacOS/Chromium',
+			'/usr/bin/google-chrome-stable',
+			'/usr/bin/google-chrome',
+			'/usr/bin/chromium-browser',
+			'/usr/bin/chromium',
+			'google-chrome-stable',
+			'google-chrome',
+			'chromium-browser',
+			'chromium',
+		) ) );
+
+		foreach ( $candidates as $candidate ) {
+			if ( false !== strpos( $candidate, '/' ) && is_executable( $candidate ) ) {
+				return $candidate;
+			}
+
+			if ( false === strpos( $candidate, '/' ) && function_exists( 'exec' ) ) {
+				$output = array();
+				$status = 1;
+				exec( 'command -v ' . escapeshellarg( $candidate ) . ' 2>/dev/null', $output, $status );
+				if ( 0 === $status && ! empty( $output[0] ) && is_executable( $output[0] ) ) {
+					return $output[0];
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function render_pdf_with_chromium( $chromium, $html_file, $pdf_file ) {
+		if ( ! function_exists( 'proc_open' ) ) {
+			return new WP_Error( 'aiq_pdf_proc_open_disabled', __( 'proc_open is required to generate PDFs with Chromium.', 'attackiq-inform-assessment' ) );
+		}
+
+		$html_url = 'file://' . str_replace( '%2F', '/', rawurlencode( wp_normalize_path( $html_file ) ) );
+
+		$command = implode( ' ', array(
+			escapeshellarg( $chromium ),
+			'--headless=new',
+			'--disable-gpu',
+			'--disable-dev-shm-usage',
+			'--disable-extensions',
+			'--disable-sync',
+			'--no-first-run',
+			'--no-sandbox',
+			'--no-pdf-header-footer',
+			'--run-all-compositor-stages-before-draw',
+			'--virtual-time-budget=3000',
+			'--print-to-pdf=' . escapeshellarg( $pdf_file ),
+			escapeshellarg( $html_url ),
+		) );
+
+		$descriptors = array(
+			0 => array( 'pipe', 'r' ),
+			1 => array( 'pipe', 'w' ),
+			2 => array( 'pipe', 'w' ),
+		);
+
+		$process = proc_open( $command, $descriptors, $pipes );
+		if ( ! is_resource( $process ) ) {
+			return new WP_Error( 'aiq_pdf_chromium_failed', __( 'Unable to start Chromium.', 'attackiq-inform-assessment' ) );
+		}
+
+		fclose( $pipes[0] );
+		$stdout = stream_get_contents( $pipes[1] );
+		$stderr = stream_get_contents( $pipes[2] );
+		fclose( $pipes[1] );
+		fclose( $pipes[2] );
+
+		$status = proc_close( $process );
+		if ( 0 !== $status ) {
+			$message = trim( $stderr ?: $stdout );
+			return new WP_Error( 'aiq_pdf_chromium_failed', $message ? sprintf( __( 'Chromium PDF generation failed: %s', 'attackiq-inform-assessment' ), $message ) : __( 'Chromium PDF generation failed.', 'attackiq-inform-assessment' ) );
+		}
+
+		return true;
 	}
 
 	public function register_scripts() {
@@ -56,7 +298,9 @@ class AIQ_Inform_Assessment {
 
 		wp_localize_script( 'aiq-inform-assessment', 'aiqInformData', array(
             'root_id' => 'aiq-inform-assessment-root',
-            'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'pdf_url' => admin_url( 'admin-post.php' ),
+			'pdf_nonce' => wp_create_nonce( 'aiq_generate_pdf' ),
 			'rest_url' => rest_url( 'aiq/v1/' ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),
 			'siteUrl' => site_url(),
@@ -204,6 +448,12 @@ class AIQ_Inform_Assessment {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+
+		$cpt_count   = AIQ_DB::count_cpt_posts();
+		$table_count = AIQ_DB::count_rows();
+		$progress    = AIQ_Migrate::get_progress();
+		$nonce       = wp_create_nonce( 'wp_rest' );
+		$rest_url    = esc_url_raw( rest_url( 'aiq/v1/' ) );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -214,6 +464,105 @@ class AIQ_Inform_Assessment {
 				submit_button();
 				?>
 			</form>
+
+			<hr />
+			<h2><?php esc_html_e( 'Database & Backfill', 'attackiq-inform-assessment' ); ?></h2>
+			<p><?php esc_html_e( 'New submissions write to a dedicated database table for faster reporting and Salesforce hand-off. Existing submissions stored on the legacy custom post type can be backfilled into the new table on demand.', 'attackiq-inform-assessment' ); ?></p>
+
+			<table class="widefat striped" style="max-width:520px;margin-bottom:20px;">
+				<tbody>
+					<tr><th><?php esc_html_e( 'Submissions in legacy CPT', 'attackiq-inform-assessment' ); ?></th><td id="aiq-cpt-count"><?php echo esc_html( $cpt_count ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Submissions in new table', 'attackiq-inform-assessment' ); ?></th><td id="aiq-table-count"><?php echo esc_html( $table_count ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Backfill last run', 'attackiq-inform-assessment' ); ?></th><td><?php echo $progress['completed_at'] ? esc_html( $progress['completed_at'] ) . ' (UTC)' : esc_html__( 'Not run', 'attackiq-inform-assessment' ); ?></td></tr>
+				</tbody>
+			</table>
+
+			<button type="button" id="aiq-backfill-run" class="button button-primary"><?php esc_html_e( 'Run Backfill', 'attackiq-inform-assessment' ); ?></button>
+			<span id="aiq-backfill-status" style="margin-left:12px;"></span>
+
+			<script>
+			(function(){
+				var btn = document.getElementById('aiq-backfill-run');
+				var statusEl = document.getElementById('aiq-backfill-status');
+				var tableCountEl = document.getElementById('aiq-table-count');
+				if (!btn) return;
+
+				var endpoint = <?php echo wp_json_encode( $rest_url ); ?> + '_admin/backfill-batch';
+				var nonce    = <?php echo wp_json_encode( $nonce ); ?>;
+
+				function runBatch(){
+					statusEl.textContent = '<?php echo esc_js( __( 'Running…', 'attackiq-inform-assessment' ) ); ?>';
+					fetch(endpoint, {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce }
+					}).then(function(r){ return r.json(); }).then(function(data){
+						if (data.error) {
+							statusEl.textContent = 'Error: ' + data.error;
+							btn.disabled = false;
+							return;
+						}
+						tableCountEl.textContent = data.migrated;
+						statusEl.textContent = data.migrated + ' migrated · ' + data.skipped + ' skipped · ' + data.remaining + ' remaining';
+						if (data.done) {
+							btn.disabled = false;
+						} else {
+							setTimeout(runBatch, 100);
+						}
+					}).catch(function(err){
+						statusEl.textContent = 'Error: ' + err.message;
+						btn.disabled = false;
+					});
+				}
+
+				btn.addEventListener('click', function(){
+					btn.disabled = true;
+					runBatch();
+				});
+			})();
+			</script>
+
+			<hr />
+			<h2><?php esc_html_e( 'External REST API', 'attackiq-inform-assessment' ); ?></h2>
+			<p><?php esc_html_e( 'Generate an API key so external tools can pull submission data via the read API. The key is shown once at generation time and stored as a hash — keep it somewhere safe.', 'attackiq-inform-assessment' ); ?></p>
+
+			<?php
+			$flash_key = AIQ_Auth::consume_flash();
+			if ( $flash_key ) :
+				?>
+				<div class="notice notice-success" style="padding:12px;">
+					<p><strong><?php esc_html_e( 'Your new API key (shown once):', 'attackiq-inform-assessment' ); ?></strong></p>
+					<input type="text" readonly value="<?php echo esc_attr( $flash_key ); ?>" style="width:100%;max-width:520px;font-family:monospace;" onclick="this.select();" />
+					<p class="description"><?php esc_html_e( 'Copy this value now. After leaving this page only the prefix is recoverable.', 'attackiq-inform-assessment' ); ?></p>
+				</div>
+				<?php
+			endif;
+			?>
+
+			<table class="widefat striped" style="max-width:520px;margin-bottom:20px;">
+				<tbody>
+					<tr><th><?php esc_html_e( 'Status', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? esc_html__( 'Active', 'attackiq-inform-assessment' ) : esc_html__( 'No key generated', 'attackiq-inform-assessment' ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Key prefix', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? '<code>' . esc_html( AIQ_Auth::get_key_prefix() ) . '…</code>' : '—'; ?></td></tr>
+					<tr><th><?php esc_html_e( 'Created', 'attackiq-inform-assessment' ); ?></th><td><?php echo AIQ_Auth::has_key() ? esc_html( AIQ_Auth::get_created_at() ) . ' (UTC)' : '—'; ?></td></tr>
+					<tr><th><?php esc_html_e( 'Auth header', 'attackiq-inform-assessment' ); ?></th><td><code>X-AIQ-Key: &lt;your-key&gt;</code></td></tr>
+				</tbody>
+			</table>
+
+			<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;margin-right:10px;">
+				<input type="hidden" name="action" value="aiq_generate_api_key" />
+				<?php wp_nonce_field( 'aiq_generate_api_key' ); ?>
+				<button type="submit" class="button button-primary">
+					<?php echo AIQ_Auth::has_key() ? esc_html__( 'Regenerate Key', 'attackiq-inform-assessment' ) : esc_html__( 'Generate New Key', 'attackiq-inform-assessment' ); ?>
+				</button>
+			</form>
+
+			<?php if ( AIQ_Auth::has_key() ) : ?>
+				<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;" onsubmit="return confirm('<?php echo esc_js( __( 'Revoke the current API key? Existing integrations will stop working until a new key is issued.', 'attackiq-inform-assessment' ) ); ?>');">
+					<input type="hidden" name="action" value="aiq_revoke_api_key" />
+					<?php wp_nonce_field( 'aiq_revoke_api_key' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Revoke Key', 'attackiq-inform-assessment' ); ?></button>
+				</form>
+			<?php endif; ?>
 
 			<hr />
 			<h2><?php esc_html_e( 'Shortcode Usage', 'attackiq-inform-assessment' ); ?></h2>
