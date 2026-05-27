@@ -300,7 +300,12 @@ const renderStyles = () => `
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      break-after: page;
+      page-break-after: always;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
+    .page:last-child { break-after: auto; page-break-after: auto; }
     .page-inner { padding: 56px 64px; flex: 1 1 auto; }
     h1, h2, h3, h4 { font-family: Poppins, Inter, Arial, system-ui, sans-serif; margin: 0; letter-spacing: -0.02em; }
     h1 { font-size: 56px; line-height: 1.02; font-weight: 700; }
@@ -365,7 +370,7 @@ const renderStyles = () => `
     }
     .section-eyebrow::after { content: ''; flex: 1 1 auto; height: 1px; background-color: ${BRAND.rule}; }
     .score-hero {
-      display: grid; grid-template-columns: 280px 1fr; gap: 40px; align-items: stretch;
+      display: flex; align-items: stretch;
       margin: 32px 0; padding: 32px;
       background-color: ${BRAND.ink}; color: ${BRAND.paper};
       position: relative;
@@ -374,20 +379,21 @@ const renderStyles = () => `
       content: ''; position: absolute; top: 0; right: 0; left: 0; height: 4px;
       background: linear-gradient(90deg, ${BRAND.cti} 0% 25%, ${BRAND.dm} 25% 50%, ${BRAND.te} 50% 75%, ${BRAND.ctem} 75% 100%);
     }
-    .overall-score-block { position: relative; min-height: 230px; }
+    .overall-score-block { position: relative; min-height: 230px; width: 280px; flex: 0 0 280px; margin-right: 40px; }
     .overall-score-num { position: absolute; top: 18px; left: 0; font-size: 104px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; }
     .overall-score-num .dot { font-weight: 200; color: ${BRAND.purpleXLight}; }
     .overall-score-label { position: absolute; top: 140px; left: 0; font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: ${BRAND.purpleXLight}; font-weight: 600; white-space: nowrap; }
     .overall-score-name { position: absolute; top: 174px; left: 0; font-size: 26px; font-weight: 600; }
-    .dim-bars { display: flex; flex-direction: column; justify-content: center; gap: 14px; }
-    .dim-bar { display: grid; grid-template-columns: 70px 1fr 34px; gap: 14px; align-items: center; }
+    .dim-bars { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; }
+    .dim-bar { display: flex; align-items: center; margin-bottom: 14px; }
     .dim-bar .name { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
-    .dim-bar .track { height: 8px; background-color: rgba(255,255,255,0.12); position: relative; }
+    .dim-bar .name { width: 70px; flex: 0 0 70px; margin-right: 14px; }
+    .dim-bar .track { height: 8px; background-color: rgba(255,255,255,0.12); position: relative; flex: 1 1 auto; }
     .dim-bar .fill { height: 100%; }
-    .dim-bar .num { font-size: 24px; font-weight: 700; text-align: right; }
+    .dim-bar .num { font-size: 24px; font-weight: 700; text-align: right; width: 34px; flex: 0 0 34px; margin-left: 14px; }
     .dim-legend { font-size: 10px; color: rgba(255,255,255,0.6); letter-spacing: 0.12em; text-transform: uppercase; padding-top: 8px; border-style: solid; border-width: 1px 0 0 0; border-color: rgba(255,255,255,0.15); margin-top: 4px; font-weight: 600; }
-    .scale-strip { display: grid; grid-template-columns: repeat(5, 1fr); margin: 18px 0 0; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; }
-    .scale-step { padding: 14px 16px; border-style: solid; border-width: 0 1px 0 0; border-color: ${BRAND.rule}; background-color: ${BRAND.paper}; position: relative; }
+    .scale-strip { display: table; table-layout: fixed; width: 100%; margin: 18px 0 0; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; border-collapse: collapse; }
+    .scale-step { display: table-cell; padding: 14px 16px; border-style: solid; border-width: 0 1px 0 0; border-color: ${BRAND.rule}; background-color: ${BRAND.paper}; position: relative; vertical-align: top; width: 20%; }
     .scale-step:last-child { border-right-width: 0; }
     .scale-step.you { background-color: ${BRAND.purple}; color: ${BRAND.paper}; }
     .scale-step .num-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
@@ -398,13 +404,13 @@ const renderStyles = () => `
     .scale-step .desc { font-size: 11.5px; color: ${BRAND.muted}; line-height: 1.4; margin-top: 6px; }
     .scale-step.you .desc { color: rgba(255,255,255,0.85); }
     .you-tag { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-top: 8px; display: inline-block; padding: 2px 6px; background-color: rgba(255,255,255,0.2); border-radius: 3px; }
-    .profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 24px 0; }
-    .profile-cell { padding: 20px; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; background-color: ${BRAND.paper}; min-height: 120px; }
+    .profile-grid { display: flex; flex-wrap: wrap; margin: 24px -10px 0; }
+    .profile-cell { padding: 20px; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; background-color: ${BRAND.paper}; min-height: 120px; width: 30.6%; margin: 0 10px 20px; }
     .profile-cell .lbl { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: ${BRAND.muted}; font-weight: 700; margin-bottom: 8px; }
     .profile-cell .val { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
     .dim-detail { margin: 28px 0; break-inside: avoid; page-break-inside: avoid; }
     .dim-detail-header {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 0 0 14px; margin-bottom: 18px;
       border-style: solid;
       border-width: 0 0 2px 0;
@@ -413,12 +419,12 @@ const renderStyles = () => `
     .dim-detail-header h3 { font-size: 24px; font-weight: 700; letter-spacing: 0; overflow-wrap: anywhere; }
     .dim-detail-header .weight { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: ${BRAND.muted}; margin-top: 4px; font-weight: 600; }
     .dim-detail-header .score-num { font-size: 34px; font-weight: 700; line-height: 1; }
-    .components { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-    .comp { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 14px; padding: 12px 14px; background-color: ${BRAND.paper}; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; align-items: center; min-height: 54px; }
+    .components { display: flex; flex-wrap: wrap; margin: -6px; }
+    .comp { display: flex; align-items: center; width: 45.8%; margin: 6px; padding: 12px 14px; background-color: ${BRAND.paper}; border-style: solid; border-width: 1px; border-color: ${BRAND.rule}; min-height: 54px; }
     .comp .id, .rec-id, .pill { font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif; }
-    .comp .id { font-size: 11px; color: ${BRAND.muted}; font-weight: 500; }
-    .comp .name { font-size: 13px; font-weight: 500; line-height: 1.25; }
-    .level { font-size: 9.5px; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-align: center; white-space: nowrap; }
+    .comp .id { font-size: 11px; color: ${BRAND.muted}; font-weight: 500; width: 60px; flex: 0 0 60px; }
+    .comp .name { font-size: 13px; font-weight: 500; line-height: 1.25; flex: 1 1 auto; padding-right: 14px; }
+    .level { font-size: 9.5px; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-align: center; white-space: nowrap; flex: 0 0 auto; }
     .level.l1 { background-color: rgba(229,86,57,0.12); color: #E55639; }
     .level.l2 { background-color: rgba(229,161,23,0.15); color: #7F3B00; }
     .level.l3 { background-color: rgba(64,0,143,0.10); color: ${BRAND.purple}; }
@@ -427,23 +433,32 @@ const renderStyles = () => `
     .level.na { background-color: rgba(0,0,41,0.08); color: ${BRAND.muted}; }
     .radar-wrap, .matrix-wrap { margin: 28px 0; padding: 32px; background-color: ${BRAND.paper2}; }
     .chart-img { display: block; margin: 0 auto; width: 100%; max-width: 560px; }
-    .matrix { display: grid; grid-template-columns: 90px 1fr 1fr 1fr; grid-template-rows: min-content repeat(3, auto); gap: 4px; margin: 24px 0; }
-    .matrix-cell { padding: 16px 14px; background-color: ${BRAND.paper}; min-height: 110px; position: relative; }
-    .matrix-cell.matrix-corner, .matrix-cell.col-head, .matrix-cell.row-head { background-color: transparent; min-height: 0; padding: 8px 12px; }
+    .matrix { width: 100%; border-collapse: separate; border-spacing: 4px; margin: 24px 0; table-layout: fixed; }
+    .matrix-cell { padding: 12px 12px; background-color: ${BRAND.paper}; min-height: 96px; height: 96px; position: relative; vertical-align: top; }
+    .matrix-cell.matrix-corner, .matrix-cell.col-head, .matrix-cell.row-head { background-color: transparent; min-height: 0; height: auto; padding: 8px 12px; }
     .matrix-cell.col-head { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: ${BRAND.ink}; text-align: center; }
     .matrix-cell.row-head { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: ${BRAND.ink}; align-self: center; }
     .matrix-cell.hot { background-color: rgba(229,86,57,0.06); border-style: solid; border-width: 1px; border-color: rgba(229,86,57,0.25); }
     .matrix-cell.warm { background-color: rgba(229,161,23,0.06); border-style: solid; border-width: 1px; border-color: rgba(229,161,23,0.3); }
     .matrix-cell.cool { background-color: rgba(41,54,204,0.06); border-style: solid; border-width: 1px; border-color: rgba(41,54,204,0.2); }
     .pill { display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 8px; border-width: 1px; margin: 2px; border-radius: 2px; }
-    .matrix-legend { display: flex; gap: 18px; font-size: 12px; color: ${BRAND.muted}; margin-top: 12px; flex-wrap: wrap; font-weight: 500; align-items: center; }
-    .swatch { display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 6px; border-style: dashed; border-width: 1px; border-color: rgba(0,0,41,0.3); }
-    .swatch.filled { background-color: #36bae4; border-style: solid; border-color: #2a9bbf; }
-    .swatch.selected { background-color: #d6f0fa; border-style: solid; border-color: #2a9bbf; }
+    .matrix-key { margin-top: 12px; padding: 12px 14px; border-style: solid; border-width: 1px; border-color: rgba(0,0,41,0.14); background-color: #FAFAFA; break-inside: avoid; page-break-inside: avoid; break-after: avoid; page-break-after: avoid; }
+    .matrix-key h3 { color: #5B5864; font-size: 18px; margin-bottom: 12px; }
+    .matrix-key-row { display: flex; align-items: center; margin-bottom: 9px; }
+    .matrix-key-row:last-child { margin-bottom: 0; }
+    .matrix-key-items { display: flex; align-items: center; flex: 0 0 auto; }
+    .matrix-key-desc { color: #333333; font-size: 12.5px; line-height: 1.25; margin-left: 10px; }
+    .matrix-key-tile { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; min-width: 34px; padding: 3px 8px; margin-right: 4px; border-radius: 2px; border-style: solid; border-width: 1px; font-size: 10px; font-weight: 800; line-height: 1; }
+    .matrix-key-tile.highest { border-color: transparent; }
+    .matrix-key-tile.current { background-color: var(--key-light); border-color: var(--key-border); color: var(--key-text); }
+    .matrix-key-tile.suggested { min-width: 46px; background-color: transparent; border-style: dashed; border-color: #999999; color: #5B5864; }
+    .matrix-key-check { font-size: 11px; margin-right: 2px; color: #000000; }
+    .matrix-key-tile.te-highest .matrix-key-check, .matrix-key-tile.ctem-highest .matrix-key-check { color: #FFFFFF; }
     .rec-list { display: flex; flex-direction: column; gap: 0; margin: 24px 0; }
-    .rec { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 24px; padding: 22px 0; border-style: solid; border-width: 0 0 1px 0; border-color: ${BRAND.rule}; }
+    .rec { display: flex; padding: 22px 0; border-style: solid; border-width: 0 0 1px 0; border-color: ${BRAND.rule}; }
     .rec:first-child { border-top-width: 1px; }
     .rec-num { font-size: 44px; font-weight: 800; color: ${BRAND.purple}; line-height: 0.9; letter-spacing: -0.04em; }
+    .rec-body { flex: 1 1 auto; margin-left: 24px; }
     .rec-id { font-size: 11px; color: ${BRAND.muted}; margin-bottom: 4px; font-weight: 500; }
     .rec-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
     .rec-meta-line { font-size: 13px; color: ${BRAND.ink}; margin-bottom: 4px; }
@@ -454,10 +469,11 @@ const renderStyles = () => `
     .rec-steps li { font-size: 13px; padding: 6px 0 6px 22px; position: relative; line-height: 1.55; }
     .rec-steps li::before { content: '→'; position: absolute; left: 0; color: ${BRAND.purple}; font-weight: 700; }
     .rec-steps li strong { font-weight: 700; }
-    .dimension-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background-color: ${BRAND.rule}; margin: 28px 0; }
-    .dim-card { background-color: ${BRAND.paper}; padding: 24px 18px; position: relative; }
+    .dimension-cards { display: flex; background-color: ${BRAND.rule}; margin: 28px 0; }
+    .dim-card { background-color: ${BRAND.paper}; padding: 24px 18px; position: relative; flex: 1 1 0; margin-right: 1px; }
+    .dim-card:last-child { margin-right: 0; }
     .dim-card::before { content: ''; position: absolute; top: 0; right: 0; left: 0; height: 4px; background-color: var(--accent); }
-    .dim-card .tag { font-size: 10px; letter-spacing: 0.18em; font-weight: 700; text-transform: uppercase; color: ${BRAND.muted}; margin-bottom: 8px; }
+    .dim-card .tag { font-size: 10px; letter-spacing: 0.18em; font-weight: 700; text-transform: uppercase; color: ${BRAND.muted}; margin-bottom: 8px; min-height: 34px; line-height: 1.35; }
     .dim-card h3 { font-size: 28px; margin-bottom: 12px; font-weight: 800; letter-spacing: -0.02em; color: var(--accent); }
     .dim-card p { font-size: 12px; line-height: 1.45; color: ${BRAND.ink}; margin: 0; }
     .cta { background-color: ${BRAND.ink}; color: ${BRAND.paper}; padding: 36px 40px; margin: 40px 0 0; position: relative; overflow: hidden; }
@@ -467,7 +483,8 @@ const renderStyles = () => `
     .cta-eyebrow { font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: ${BRAND.purpleLight}; font-weight: 700; margin-bottom: 14px; }
     .cta-title { font-size: 36px; font-weight: 800; margin: 0 0 16px; letter-spacing: -0.025em; line-height: 1.05; }
     .cta p { max-width: 580px; color: rgba(255,255,255,0.88); font-size: 14.5px; margin: 0 0 28px; line-height: 1.6; }
-    .cta-contact { display: flex; gap: 48px; padding-top: 22px; border-style: solid; border-width: 1px 0 0 0; border-color: rgba(255,255,255,0.18); flex-wrap: wrap; }
+    .cta-contact { display: flex; padding-top: 22px; border-style: solid; border-width: 1px 0 0 0; border-color: rgba(255,255,255,0.18); }
+    .cta-contact .item { flex: 1 1 0; }
     .cta-contact .lbl { display: block; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 700; margin-bottom: 4px; }
     .cta-contact .val { font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif; font-size: 15px; font-weight: 500; color: ${BRAND.purpleXLight}; }
     `)}
@@ -651,21 +668,23 @@ const renderMatrixPage = (results) => {
     const complexityLabels = { 1: 'Low Complexity', 2: 'Medium Complexity', 3: 'High Complexity' };
 
     const cells = rows.map(row => `
-      <div class="matrix-cell row-head">${impactLabels[row]}<br>Impact</div>
-      ${cols.map((col) => {
+      <tr>
+        <th class="matrix-cell row-head" scope="row">${impactLabels[row]}<br>Impact</th>
+        ${cols.map((col) => {
         const key = `i-${row}_c-${col}`;
         const items = results.impactComplexityMap?.get?.(key) || [];
         const className = row === 3 && col === 1 ? 'hot' : row === 3 || col === 1 ? 'warm' : 'cool';
         return `
-          <div class="matrix-cell ${className}">
+          <td class="matrix-cell ${className}">
             ${items.map((item) => {
                 const displayKey = item.uid || item.componentKey || '';
                 const hasCheck = item.selected && item.highestValue;
                 return `<span class="pill" style="${matrixPillStyle(item)}">${hasCheck ? '✓ ' : ''}${escapeHtml(displayKey)}</span>`;
             }).join('')}
-          </div>
+          </td>
         `;
       }).join('')}
+      </tr>
     `).join('');
 
     return {
@@ -677,15 +696,43 @@ const renderMatrixPage = (results) => {
             your overall score and how hard it is to achieve. <strong>Top-left wins.</strong>
             High-impact, low-complexity moves are the recommended starting points.
           </p>
-          <div class="matrix">
-            <div class="matrix-cell matrix-corner"></div>
-            ${cols.map(col => `<div class="matrix-cell col-head">${complexityLabels[col]}</div>`).join('')}
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th class="matrix-cell matrix-corner" scope="col"></th>
+                ${cols.map(col => `<th class="matrix-cell col-head" scope="col">${complexityLabels[col]}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
             ${cells}
-          </div>
-          <div class="matrix-legend">
-            <span><span class="swatch filled"></span>Highest selected level</span>
-            <span><span class="swatch selected"></span>Selected level</span>
-            <span><span class="swatch"></span>Available level</span>
+            </tbody>
+          </table>
+          <div class="matrix-key">
+            <h3>Matrix Key</h3>
+            <div class="matrix-key-row">
+              <div class="matrix-key-items">
+                <span class="matrix-key-tile highest" style="background:#ffcc00; color:#000000;"><span class="matrix-key-check">✓</span>CTI</span>
+                <span class="matrix-key-tile highest" style="background:#36bae4; color:#000000;"><span class="matrix-key-check">✓</span>DM</span>
+                <span class="matrix-key-tile highest te-highest" style="background:#f02c68; color:#FFFFFF;"><span class="matrix-key-check">✓</span>TE</span>
+                <span class="matrix-key-tile highest ctem-highest" style="background:#7b3ff2; color:#FFFFFF;"><span class="matrix-key-check">✓</span>CTEM</span>
+              </div>
+              <div class="matrix-key-desc">Highest possible impact complexity score</div>
+            </div>
+            <div class="matrix-key-row">
+              <div class="matrix-key-items">
+                <span class="matrix-key-tile current" style="--key-light:#fff3cc; --key-border:#e6b800; --key-text:#8a6d00;">CTI</span>
+                <span class="matrix-key-tile current" style="--key-light:#d6f0fa; --key-border:#2a9bbf; --key-text:#1a6e8a;">DM</span>
+                <span class="matrix-key-tile current" style="--key-light:#fdd6e3; --key-border:#d41e56; --key-text:#a01040;">TE</span>
+                <span class="matrix-key-tile current" style="--key-light:#ece1ff; --key-border:#5a23bf; --key-text:#3f1d8a;">CTEM</span>
+              </div>
+              <div class="matrix-key-desc">Current score selection (not the highest possible value)</div>
+            </div>
+            <div class="matrix-key-row">
+              <div class="matrix-key-items">
+                <span class="matrix-key-tile suggested">EX.3</span>
+              </div>
+              <div class="matrix-key-desc">Suggested levels that have not been selected</div>
+            </div>
           </div>
         `,
     };
@@ -709,7 +756,7 @@ const renderRecommendationPage = (groups, offset, totalRecommendations) => ({
             return `
               <div class="rec">
                 <div class="rec-num">${recNo}</div>
-                <div>
+                <div class="rec-body">
                   <div class="rec-id">${escapeHtml(recId)}</div>
                   <div class="rec-title">${escapeHtml(recTitle)}</div>
                   ${cb.selectedLabel ? `<div class="rec-meta-line"><span class="lbl">Suggested level:</span> ${escapeHtml(cb.selectedLabel)}</div>` : ''}
@@ -727,7 +774,7 @@ const renderRecommendationPage = (groups, offset, totalRecommendations) => ({
         }).join('') : `
           <div class="rec">
             <div class="rec-num">01</div>
-            <div>
+            <div class="rec-body">
               <div class="rec-title">Complete the assessment to generate recommendations</div>
               <p class="rec-desc">Recommendations appear here once there are available maturity moves with supporting guidance.</p>
             </div>
@@ -751,7 +798,7 @@ const renderFinalPage = (sections) => {
             It defines threat-informed defense as the systematic application of adversary tradecraft
             and technology understanding to improve defenses.
           </p>
-          <div class="dimension-cards" style="grid-template-columns: repeat(${gridCols}, 1fr);">
+          <div class="dimension-cards" style="--card-count:${gridCols};">
             ${scoredSections.map((section) => {
                 const meta = SECTION_META[section.section_id];
                 return `
@@ -768,13 +815,19 @@ const renderFinalPage = (sections) => {
               <div class="cta-eyebrow">Next Steps · AttackIQ Professional Services</div>
               <h3 class="cta-title">Take this <span class="emph-light">further</span></h3>
               <p>
+                MITRE INFORM is a maturity model from the MITRE Center for Threat-Informed Defense.
+                It defines threat-informed defense as the systematic application of adversary tradecraft
+                and technology understanding to improve defenses. AttackIQ has further extended INFORM
+                to support CTEM and to deliver enhanced maturity recommendations.
+              </p>
+              <p>
                 AttackIQ Professional Services facilitates INFORM tabletops, builds tailored threat-informed
                 defense roadmaps, and partners with security leaders on the journey from assessment to sustained maturity.
               </p>
               <div class="cta-contact">
                 <div class="item">
                   <span class="lbl">Email</span>
-                  <span class="val">pro-serve@attackiq.com</span>
+                  <span class="val">inform@attackiq.com</span>
                 </div>
                 <div class="item">
                   <span class="lbl">Web</span>

@@ -23,6 +23,8 @@ register_activation_hook( __FILE__, array( 'AIQ_DB', 'install' ) );
 class AIQ_Inform_Assessment {
 
 	const PDF_MAX_HTML_BYTES = 4000000;
+	const DOCRAPTOR_API_URL = 'https://api.docraptor.com/docs';
+	const DOCRAPTOR_DEFAULT_API_KEY = '6d3RwJdMsiNbV930cqBL';
 
 	private $default_marketo_form_id = '';
 	private $default_marketo_instance = 'app-ab33.marketo.com';
@@ -46,7 +48,7 @@ class AIQ_Inform_Assessment {
 		}
 		check_admin_referer( 'aiq_generate_api_key' );
 		AIQ_Auth::generate_and_store();
-		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=aiq-inform-assessment-settings&aiq_key_generated=1' ) );
 		exit;
 	}
 
@@ -56,7 +58,7 @@ class AIQ_Inform_Assessment {
 		}
 		check_admin_referer( 'aiq_revoke_api_key' );
 		AIQ_Auth::revoke();
-		wp_safe_redirect( admin_url( 'options-general.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=aiq-inform-assessment-settings&aiq_key_revoked=1' ) );
 		exit;
 	}
 
@@ -82,44 +84,21 @@ class AIQ_Inform_Assessment {
 
 		$html = $this->prepare_pdf_html( $html );
 
-		$html_file = $this->create_pdf_temp_file( 'aiq-inform-report', 'html' );
-		$pdf_file  = $this->create_pdf_temp_file( 'aiq-inform-report', 'pdf' );
-
-		if ( ! $html_file || ! $pdf_file ) {
-			wp_die( esc_html__( 'Unable to create temporary PDF files.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		$pdf = $this->render_pdf_with_docraptor( $html, $filename );
+		if ( is_wp_error( $pdf ) ) {
+			wp_die( esc_html( $pdf->get_error_message() ), '', array( 'response' => 500 ) );
 		}
 
-		file_put_contents( $html_file, $html );
-
-		$chromium = $this->locate_chromium();
-		if ( ! $chromium ) {
-			@unlink( $html_file );
-			@unlink( $pdf_file );
-			wp_die( esc_html__( 'Chromium was not found on the server. Set AIQ_INFORM_CHROMIUM_PATH or install chromium/google-chrome.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
-		}
-
-		$result = $this->render_pdf_with_chromium( $chromium, $html_file, $pdf_file );
-		if ( is_wp_error( $result ) ) {
-			@unlink( $html_file );
-			@unlink( $pdf_file );
-			wp_die( esc_html( $result->get_error_message() ), '', array( 'response' => 500 ) );
-		}
-
-		if ( ! file_exists( $pdf_file ) || filesize( $pdf_file ) < 1000 ) {
-			@unlink( $html_file );
-			@unlink( $pdf_file );
-			wp_die( esc_html__( 'Chromium did not produce a readable PDF.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		if ( strlen( $pdf ) < 1000 || 0 !== strncmp( $pdf, '%PDF', 4 ) ) {
+			wp_die( esc_html__( 'DocRaptor did not produce a readable PDF.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
 		}
 
 		nocache_headers();
 		$this->set_pdf_download_cookie( $download_token );
 		header( 'Content-Type: application/pdf' );
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
-		header( 'Content-Length: ' . filesize( $pdf_file ) );
-		readfile( $pdf_file );
-
-		@unlink( $html_file );
-		@unlink( $pdf_file );
+		header( 'Content-Length: ' . strlen( $pdf ) );
+		echo $pdf;
 		exit;
 	}
 
@@ -147,21 +126,6 @@ class AIQ_Inform_Assessment {
 		return $html;
 	}
 
-	private function create_pdf_temp_file( $prefix, $extension ) {
-		$base = wp_tempnam( $prefix );
-		if ( ! $base ) {
-			return false;
-		}
-
-		$path = $base . '.' . ltrim( $extension, '.' );
-		if ( ! @rename( $base, $path ) ) {
-			@unlink( $base );
-			return false;
-		}
-
-		return $path;
-	}
-
 	private function set_pdf_download_cookie( $download_token ) {
 		if ( empty( $download_token ) || headers_sent() ) {
 			return;
@@ -179,87 +143,74 @@ class AIQ_Inform_Assessment {
 		header( 'Set-Cookie: ' . $cookie, false );
 	}
 
-	private function locate_chromium() {
-		$candidates = array_filter( apply_filters( 'aiq_inform_chromium_paths', array(
-			defined( 'AIQ_INFORM_CHROMIUM_PATH' ) ? AIQ_INFORM_CHROMIUM_PATH : null,
-			getenv( 'AIQ_INFORM_CHROMIUM_PATH' ),
-			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-			'/Applications/Chromium.app/Contents/MacOS/Chromium',
-			'/usr/bin/google-chrome-stable',
-			'/usr/bin/google-chrome',
-			'/usr/bin/chromium-browser',
-			'/usr/bin/chromium',
-			'google-chrome-stable',
-			'google-chrome',
-			'chromium-browser',
-			'chromium',
-		) ) );
+	private function get_docraptor_api_key() {
+		$api_key = defined( 'AIQ_INFORM_DOCRAPTOR_API_KEY' ) ? AIQ_INFORM_DOCRAPTOR_API_KEY : getenv( 'AIQ_INFORM_DOCRAPTOR_API_KEY' );
 
-		foreach ( $candidates as $candidate ) {
-			if ( false !== strpos( $candidate, '/' ) && is_executable( $candidate ) ) {
-				return $candidate;
-			}
-
-			if ( false === strpos( $candidate, '/' ) && function_exists( 'exec' ) ) {
-				$output = array();
-				$status = 1;
-				exec( 'command -v ' . escapeshellarg( $candidate ) . ' 2>/dev/null', $output, $status );
-				if ( 0 === $status && ! empty( $output[0] ) && is_executable( $output[0] ) ) {
-					return $output[0];
-				}
-			}
+		if ( empty( $api_key ) ) {
+			$api_key = self::DOCRAPTOR_DEFAULT_API_KEY;
 		}
 
-		return null;
+		return apply_filters( 'aiq_inform_docraptor_api_key', $api_key );
 	}
 
-	private function render_pdf_with_chromium( $chromium, $html_file, $pdf_file ) {
-		if ( ! function_exists( 'proc_open' ) ) {
-			return new WP_Error( 'aiq_pdf_proc_open_disabled', __( 'proc_open is required to generate PDFs with Chromium.', 'attackiq-inform-assessment' ) );
+	private function render_pdf_with_docraptor( $html, $filename ) {
+		$api_key = $this->get_docraptor_api_key();
+		if ( empty( $api_key ) ) {
+			return new WP_Error( 'aiq_pdf_docraptor_missing_key', __( 'DocRaptor API key is not configured.', 'attackiq-inform-assessment' ) );
 		}
 
-		$html_url = 'file://' . str_replace( '%2F', '/', rawurlencode( wp_normalize_path( $html_file ) ) );
-
-		$command = implode( ' ', array(
-			escapeshellarg( $chromium ),
-			'--headless=new',
-			'--disable-gpu',
-			'--disable-dev-shm-usage',
-			'--disable-extensions',
-			'--disable-sync',
-			'--no-first-run',
-			'--no-sandbox',
-			'--no-pdf-header-footer',
-			'--run-all-compositor-stages-before-draw',
-			'--virtual-time-budget=3000',
-			'--print-to-pdf=' . escapeshellarg( $pdf_file ),
-			escapeshellarg( $html_url ),
-		) );
-
-		$descriptors = array(
-			0 => array( 'pipe', 'r' ),
-			1 => array( 'pipe', 'w' ),
-			2 => array( 'pipe', 'w' ),
+		$payload = array(
+			'test'             => (bool) apply_filters( 'aiq_inform_docraptor_test_mode', true ),
+			'type'             => 'pdf',
+			'pipeline'         => '10.1',
+			'name'             => $filename,
+			'document_content' => $html,
+			'prince_options'   => array(
+				'media'   => 'print',
+				'css_dpi' => 96,
+			),
 		);
 
-		$process = proc_open( $command, $descriptors, $pipes );
-		if ( ! is_resource( $process ) ) {
-			return new WP_Error( 'aiq_pdf_chromium_failed', __( 'Unable to start Chromium.', 'attackiq-inform-assessment' ) );
+		$response = wp_remote_post( self::DOCRAPTOR_API_URL, array(
+			'timeout' => 90,
+			'headers' => array(
+				'Accept'        => 'application/pdf',
+				'Authorization' => 'Basic ' . base64_encode( $api_key . ':' ),
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( $payload ),
+		) );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'aiq_pdf_docraptor_request_failed',
+				sprintf( __( 'DocRaptor PDF generation failed: %s', 'attackiq-inform-assessment' ), $response->get_error_message() )
+			);
 		}
 
-		fclose( $pipes[0] );
-		$stdout = stream_get_contents( $pipes[1] );
-		$stderr = stream_get_contents( $pipes[2] );
-		fclose( $pipes[1] );
-		fclose( $pipes[2] );
+		$status = wp_remote_retrieve_response_code( $response );
+		$body   = wp_remote_retrieve_body( $response );
 
-		$status = proc_close( $process );
-		if ( 0 !== $status ) {
-			$message = trim( $stderr ?: $stdout );
-			return new WP_Error( 'aiq_pdf_chromium_failed', $message ? sprintf( __( 'Chromium PDF generation failed: %s', 'attackiq-inform-assessment' ), $message ) : __( 'Chromium PDF generation failed.', 'attackiq-inform-assessment' ) );
+		if ( $status < 200 || $status >= 300 ) {
+			$message = $this->get_docraptor_error_message( $body );
+			return new WP_Error(
+				'aiq_pdf_docraptor_failed',
+				$message ? sprintf( __( 'DocRaptor PDF generation failed: %s', 'attackiq-inform-assessment' ), $message ) : __( 'DocRaptor PDF generation failed.', 'attackiq-inform-assessment' )
+			);
 		}
 
-		return true;
+		return $body;
+	}
+
+	private function get_docraptor_error_message( $body ) {
+		if ( empty( $body ) ) {
+			return '';
+		}
+
+		$message = wp_strip_all_tags( $body );
+		$message = preg_replace( '/\s+/', ' ', $message );
+
+		return trim( $message );
 	}
 
 	public function register_scripts() {
@@ -319,9 +270,10 @@ class AIQ_Inform_Assessment {
 	}
 
 	public function add_settings_page() {
-		add_options_page(
+		add_submenu_page(
+			'aiq-submissions',
 			__( 'INFORM Assessment Settings', 'attackiq-inform-assessment' ),
-			__( 'INFORM Assessment', 'attackiq-inform-assessment' ),
+			__( 'Settings', 'attackiq-inform-assessment' ),
 			'manage_options',
 			'aiq-inform-assessment-settings',
 			array( $this, 'render_settings_page' )

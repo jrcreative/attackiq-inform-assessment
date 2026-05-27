@@ -36,11 +36,15 @@ Once activated, you can configure the plugin settings via the WordPress Admin Da
 
 ### Server-Side PDF Generation
 
-PDF reports are rendered on the server with headless Chromium. Install `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable` on the web server, or define `AIQ_INFORM_CHROMIUM_PATH` with the full executable path before WordPress loads.
+PDF reports are rendered through the DocRaptor API service. The plugin sends the generated report HTML to DocRaptor in test mode, which creates watermarked PDFs while testing.
+
+To override the bundled API key, define `AIQ_INFORM_DOCRAPTOR_API_KEY` before WordPress loads:
 
 ```php
-define( 'AIQ_INFORM_CHROMIUM_PATH', '/usr/bin/chromium' );
+define( 'AIQ_INFORM_DOCRAPTOR_API_KEY', 'your-docraptor-api-key' );
 ```
+
+Test mode currently defaults to `true`. Developers can override the flag with the `aiq_inform_docraptor_test_mode` filter when production PDF generation is ready.
 
 ## Usage
 
