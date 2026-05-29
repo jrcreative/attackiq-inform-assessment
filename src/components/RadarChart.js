@@ -9,6 +9,7 @@ import {
     Legend,
 } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
+import { ratioToDisplayScore } from '../utils/comparisonEngine';
 
 ChartJS.register(
     RadialLinearScale,
@@ -36,12 +37,7 @@ const getComponentScore = (q) => {
 
 const ratioToLevel = (ratio) => {
     if (ratio == null) return null;
-    if (ratio <= 0)   return 0;
-    if (ratio <= 0.2) return 1;
-    if (ratio <= 0.4) return 2;
-    if (ratio <= 0.6) return 3;
-    if (ratio <= 0.8) return 4;
-    return 5;
+    return ratioToDisplayScore(ratio);
 };
 
 const HISTORICAL_PALETTE = [
