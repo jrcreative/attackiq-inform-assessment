@@ -4,6 +4,27 @@ const MAX_FILES = 4;
 
 const SECTION_FALLBACK_ORDER = ['CTI', 'DM', 'TE', 'CTEM', 'TP'];
 
+const clampRoundedScore = (score) => Math.max(0, Math.min(5, Math.round(score)));
+
+export const ratioToDisplayScore = (ratio) => {
+    if (typeof ratio !== 'number' || Number.isNaN(ratio)) return null;
+    return clampRoundedScore(ratio * 5);
+};
+
+export const historicalSectionDisplayScore = (section) => {
+    if (!section || section.missing) return null;
+    if (typeof section.ratio === 'number') {
+        return ratioToDisplayScore(section.ratio);
+    }
+    if (typeof section.totalPoints === 'number' && section.possiblePoints) {
+        return ratioToDisplayScore(section.totalPoints / section.possiblePoints);
+    }
+    if (typeof section.totalPoints === 'number') {
+        return clampRoundedScore(section.totalPoints);
+    }
+    return null;
+};
+
 const inferSectionId = (sectionName) => {
     if (!sectionName) return null;
     const n = String(sectionName).toLowerCase();

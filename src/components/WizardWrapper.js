@@ -8,6 +8,7 @@ import { generatePDF } from '../utils/pdfGenerator';
 import { generateMitreJSON } from '../utils/jsonGenerator';
 import { submitResults, buildThreatProfile } from '../utils/api';
 import { buildRecommendationGroups } from '../utils/recommendationEngine';
+import { historicalSectionDisplayScore } from '../utils/comparisonEngine';
 import HistoricalUpload from './HistoricalUpload';
 import MarketoModal from './MarketoModal';
 
@@ -709,16 +710,8 @@ const WizardWrapper = () => {
                                                         </td>
                                                         {historicalResults.map((rec, idx) => {
                                                             const match = (rec.sections || []).find(s => s.section_id === section.section_id);
-                                                            let display = '—';
-                                                            if (match && !match.missing) {
-                                                                if (typeof match.ratio === 'number') {
-                                                                    display = (match.ratio * 5).toFixed(1);
-                                                                } else if (typeof match.totalPoints === 'number' && match.possiblePoints) {
-                                                                    display = ((match.totalPoints / match.possiblePoints) * 5).toFixed(1);
-                                                                } else if (typeof match.totalPoints === 'number') {
-                                                                    display = match.totalPoints;
-                                                                }
-                                                            }
+                                                            const displayScore = historicalSectionDisplayScore(match);
+                                                            const display = displayScore == null ? '—' : displayScore;
                                                             return (
                                                                 <td key={idx} style={{ padding: '8px 10px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: display === '—' ? '#bbb' : BRAND_COLORS.text }}>
                                                                     {display}
