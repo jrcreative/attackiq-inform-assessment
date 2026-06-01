@@ -24,7 +24,6 @@ class AIQ_Inform_Assessment {
 
 	const PDF_MAX_HTML_BYTES = 4000000;
 	const DOCRAPTOR_API_URL = 'https://api.docraptor.com/docs';
-	const DOCRAPTOR_DEFAULT_API_KEY = '6d3RwJdMsiNbV930cqBL';
 
 	private $default_marketo_form_id = '';
 	private $default_marketo_instance = 'app-ab33.marketo.com';
@@ -40,6 +39,15 @@ class AIQ_Inform_Assessment {
 		add_action( 'admin_post_aiq_revoke_api_key', array( $this, 'handle_revoke_api_key' ) );
 		add_action( 'admin_post_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
 		add_action( 'admin_post_nopriv_aiq_generate_pdf', array( $this, 'handle_generate_pdf' ) );
+		add_action( 'rest_api_init', array( $this, 'register_pdf_route' ) );
+	}
+
+	public function register_pdf_route() {
+		register_rest_route( 'aiq/v1', '/generate-pdf', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_generate_pdf_rest' ),
+			'permission_callback' => '__return_true',
+		) );
 	}
 
 	public function handle_generate_api_key() {
@@ -66,31 +74,36 @@ class AIQ_Inform_Assessment {
 		check_admin_referer( 'aiq_generate_pdf' );
 
 		$html = isset( $_POST['html'] ) ? wp_unslash( $_POST['html'] ) : '';
-		if ( empty( $html ) ) {
-			wp_die( esc_html__( 'Missing report HTML.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
-		}
-		if ( strlen( $html ) > self::PDF_MAX_HTML_BYTES ) {
-			wp_die( esc_html__( 'Report HTML is too large to render.', 'attackiq-inform-assessment' ), '', array( 'response' => 413 ) );
-		}
-		if ( false === strpos( $html, 'aiq-pdf-render-root' ) ) {
-			wp_die( esc_html__( 'Invalid report payload.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
-		}
-
 		$filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : 'AttackIQ-INFORM-Assessment-Report.pdf';
-		if ( '.pdf' !== substr( strtolower( $filename ), -4 ) ) {
-			$filename .= '.pdf';
-		}
 		$download_token = isset( $_POST['download_token'] ) ? sanitize_key( wp_unslash( $_POST['download_token'] ) ) : '';
 
-		$html = $this->prepare_pdf_html( $html );
+		$this->send_pdf_response( $html, $filename, $download_token );
+	}
 
-		$pdf = $this->render_pdf_with_docraptor( $html, $filename );
-		if ( is_wp_error( $pdf ) ) {
-			wp_die( esc_html( $pdf->get_error_message() ), '', array( 'response' => 500 ) );
+	public function handle_generate_pdf_rest( $request ) {
+		$params = $request->get_body_params();
+		if ( empty( $params ) ) {
+			$params = $request->get_json_params();
 		}
 
-		if ( strlen( $pdf ) < 1000 || 0 !== strncmp( $pdf, '%PDF', 4 ) ) {
-			wp_die( esc_html__( 'DocRaptor did not produce a readable PDF.', 'attackiq-inform-assessment' ), '', array( 'response' => 500 ) );
+		$html = isset( $params['html'] ) ? (string) $params['html'] : '';
+		$filename = isset( $params['filename'] ) ? sanitize_file_name( $params['filename'] ) : 'AttackIQ-INFORM-Assessment-Report.pdf';
+		$download_token = isset( $params['download_token'] ) ? sanitize_key( $params['download_token'] ) : '';
+
+		$this->send_pdf_response( $html, $filename, $download_token );
+	}
+
+	private function send_pdf_response( $html, $filename, $download_token ) {
+		$pdf = $this->generate_pdf_document( $html, $filename );
+		if ( is_wp_error( $pdf ) ) {
+			$error_data = $pdf->get_error_data();
+			$status = is_array( $error_data ) && isset( $error_data['status'] ) ? (int) $error_data['status'] : 500;
+
+			wp_die(
+				esc_html( $pdf->get_error_message() ),
+				'',
+				array( 'response' => $status ?: 500 )
+			);
 		}
 
 		nocache_headers();
@@ -100,6 +113,50 @@ class AIQ_Inform_Assessment {
 		header( 'Content-Length: ' . strlen( $pdf ) );
 		echo $pdf;
 		exit;
+	}
+
+	private function generate_pdf_document( $html, $filename ) {
+		if ( empty( $html ) ) {
+			return new WP_Error(
+				'aiq_pdf_missing_html',
+				__( 'Missing report HTML.', 'attackiq-inform-assessment' ),
+				array( 'status' => 400 )
+			);
+		}
+		if ( strlen( $html ) > self::PDF_MAX_HTML_BYTES ) {
+			return new WP_Error(
+				'aiq_pdf_html_too_large',
+				__( 'Report HTML is too large to render.', 'attackiq-inform-assessment' ),
+				array( 'status' => 413 )
+			);
+		}
+		if ( false === strpos( $html, 'aiq-pdf-render-root' ) ) {
+			return new WP_Error(
+				'aiq_pdf_invalid_payload',
+				__( 'Invalid report payload.', 'attackiq-inform-assessment' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( '.pdf' !== substr( strtolower( $filename ), -4 ) ) {
+			$filename .= '.pdf';
+		}
+
+		$html = $this->prepare_pdf_html( $html );
+		$pdf = $this->render_pdf_with_docraptor( $html, $filename );
+		if ( is_wp_error( $pdf ) ) {
+			return $pdf;
+		}
+
+		if ( strlen( $pdf ) < 1000 || 0 !== strncmp( $pdf, '%PDF', 4 ) ) {
+			return new WP_Error(
+				'aiq_pdf_docraptor_unreadable',
+				__( 'DocRaptor did not produce a readable PDF.', 'attackiq-inform-assessment' ),
+				array( 'status' => 500 )
+			);
+		}
+
+		return $pdf;
 	}
 
 	private function prepare_pdf_html( $html ) {
@@ -146,10 +203,6 @@ class AIQ_Inform_Assessment {
 	private function get_docraptor_api_key() {
 		$api_key = defined( 'AIQ_INFORM_DOCRAPTOR_API_KEY' ) ? AIQ_INFORM_DOCRAPTOR_API_KEY : getenv( 'AIQ_INFORM_DOCRAPTOR_API_KEY' );
 
-		if ( empty( $api_key ) ) {
-			$api_key = self::DOCRAPTOR_DEFAULT_API_KEY;
-		}
-
 		return apply_filters( 'aiq_inform_docraptor_api_key', $api_key );
 	}
 
@@ -160,7 +213,6 @@ class AIQ_Inform_Assessment {
 		}
 
 		$payload = array(
-			'test'             => (bool) apply_filters( 'aiq_inform_docraptor_test_mode', true ),
 			'type'             => 'pdf',
 			'pipeline'         => '10.1',
 			'name'             => $filename,
@@ -250,7 +302,7 @@ class AIQ_Inform_Assessment {
 		wp_localize_script( 'aiq-inform-assessment', 'aiqInformData', array(
             'root_id' => 'aiq-inform-assessment-root',
 			'ajax_url' => admin_url( 'admin-ajax.php' ),
-			'pdf_url' => admin_url( 'admin-post.php' ),
+			'pdf_url' => rest_url( 'aiq/v1/generate-pdf' ),
 			'pdf_nonce' => wp_create_nonce( 'aiq_generate_pdf' ),
 			'rest_url' => rest_url( 'aiq/v1/' ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),

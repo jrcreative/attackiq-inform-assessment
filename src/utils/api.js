@@ -49,6 +49,11 @@ export const buildThreatProfile = (data, answers) => {
 };
 
 export const submitResults = async (answers, result, context = {}) => {
+    if (!answers || Object.keys(answers).length === 0) {
+        console.warn('Assessment submission skipped: no answers to save.');
+        return false;
+    }
+
     const config = window.aiqInformData || {};
     const restBase = config.rest_url || '/wp-json/aiq/v1/';
     const endpoint = `${restBase.replace(/\/$/, '')}/submit`;
@@ -102,7 +107,16 @@ export const submitResults = async (answers, result, context = {}) => {
         });
 
         if (!response.ok) {
-            throw new Error(`Submission failed with HTTP ${response.status}`);
+            let message = `Submission failed with HTTP ${response.status}`;
+            try {
+                const body = await response.json();
+                if (body?.message) {
+                    message = `${message}: ${body.message}`;
+                }
+            } catch {
+                // Keep the HTTP status message if WordPress returns a non-JSON error page.
+            }
+            throw new Error(message);
         }
 
         const body = await response.json();

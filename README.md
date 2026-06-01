@@ -38,13 +38,13 @@ Once activated, you can configure the plugin settings via the WordPress Admin Da
 
 PDF reports are rendered through the DocRaptor API service. The plugin sends the generated report HTML to DocRaptor in test mode, which creates watermarked PDFs while testing.
 
-To override the bundled API key, define `AIQ_INFORM_DOCRAPTOR_API_KEY` before WordPress loads:
+Define `AIQ_INFORM_DOCRAPTOR_API_KEY` in `wp-config.php`, above the line that says "That's all, stop editing", so the key is not stored in the plugin:
 
 ```php
 define( 'AIQ_INFORM_DOCRAPTOR_API_KEY', 'your-docraptor-api-key' );
 ```
 
-Test mode currently defaults to `true`. Developers can override the flag with the `aiq_inform_docraptor_test_mode` filter when production PDF generation is ready.
+The plugin also accepts an `AIQ_INFORM_DOCRAPTOR_API_KEY` environment variable. If neither the constant nor the environment variable is configured, PDF generation will fail with a configuration error.
 
 ## Usage
 

@@ -219,21 +219,68 @@ const clearCookie = (name) => {
     document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
 };
 
-const waitForDownloadCookie = (token, timeoutMs = 90000) => new Promise((resolve) => {
+const getPdfEndpoint = () => {
+    const config = window.aiqInformData || {};
+    if (config.rest_url) return `${config.rest_url.replace(/\/$/, '')}/generate-pdf`;
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}/wp-json/aiq/v1/generate-pdf`;
+    }
+    return '';
+};
+
+const readFrameError = (frame) => {
+    try {
+        const text = frame?.contentDocument?.body?.innerText?.trim();
+        return text || '';
+    } catch {
+        return '';
+    }
+};
+
+const waitForDownloadResult = (token, frame, timeoutMs = 90000) => new Promise((resolve) => {
     const cookieName = `aiq_pdf_download_${token}`;
     const startedAt = Date.now();
 
+    const cleanup = () => {
+        window.clearInterval(intervalId);
+        frame?.removeEventListener('load', handleFrameLoad);
+    };
+
+    const complete = (result) => {
+        cleanup();
+        resolve(result);
+    };
+
+    const handleFrameLoad = () => {
+        window.setTimeout(() => {
+            if (getCookieValue(cookieName) === 'complete') {
+                clearCookie(cookieName);
+                complete({ ok: true });
+                return;
+            }
+
+            const message = readFrameError(frame);
+            complete({
+                ok: false,
+                message: message || 'PDF generation failed before the download could start.',
+            });
+        }, 100);
+    };
+
+    frame?.addEventListener('load', handleFrameLoad);
+
     const intervalId = window.setInterval(() => {
         if (getCookieValue(cookieName) === 'complete') {
-            window.clearInterval(intervalId);
             clearCookie(cookieName);
-            resolve(true);
+            complete({ ok: true });
             return;
         }
 
         if (Date.now() - startedAt > timeoutMs) {
-            window.clearInterval(intervalId);
-            resolve(false);
+            complete({
+                ok: false,
+                message: 'PDF generation timed out before the download could start.',
+            });
         }
     }, 350);
 });
@@ -902,7 +949,8 @@ export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessm
     }
 
     const config = window.aiqInformData || {};
-    if (!config.pdf_url || !config.pdf_nonce) {
+    const pdfEndpoint = getPdfEndpoint();
+    if (!pdfEndpoint) {
         console.error('PDF download endpoint is not configured');
         return false;
     }
@@ -945,13 +993,12 @@ ${reportHtml}
 
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = config.pdf_url;
+    form.action = pdfEndpoint;
     form.target = frameName;
     form.style.display = 'none';
 
     const fields = {
         action: 'aiq_generate_pdf',
-        _wpnonce: config.pdf_nonce,
         filename,
         download_token: downloadToken,
         html: reportDocument,
@@ -964,16 +1011,18 @@ ${reportHtml}
         form.appendChild(field);
     });
 
+    const downloadResult = waitForDownloadResult(downloadToken, frame);
+
     document.body.appendChild(form);
     form.submit();
     form.remove();
 
-    const completed = await waitForDownloadCookie(downloadToken);
-    if (!completed) {
-        console.warn('PDF download did not confirm completion before the loader timed out.');
+    const result = await downloadResult;
+    if (!result.ok) {
+        throw new Error(result.message);
     }
 
-    return completed;
+    return true;
 };
 
 export default generatePDF;
