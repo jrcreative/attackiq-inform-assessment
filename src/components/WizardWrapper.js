@@ -222,6 +222,7 @@ const WizardWrapper = () => {
             });
         } catch (err) {
             console.error('PDF generation error:', err);
+            window.alert(err?.message || 'PDF generation failed. Please try again.');
         }
         setIsGenerating(false);
         setShowDownloadMenu(false);
