@@ -56,6 +56,8 @@ export const submitResults = async (answers, result, context = {}) => {
     const lead = context.lead || {};
     const data = context.data || null;
     const ctemSkipped = Boolean(context.ctemSkipped);
+    const downloadToken = context.download_token || null;
+    const downloadTokenExpiresAt = context.download_token_expires_at || null;
 
     const ctiSection  = findSection(result, 'CTI');
     const dmSection   = findSection(result, 'DM');
@@ -75,6 +77,8 @@ export const submitResults = async (answers, result, context = {}) => {
         },
         threatProfile,
         recommendations: context.recommendations || null,
+        download_token: downloadToken,
+        download_token_expires_at: downloadTokenExpiresAt,
         result: {
             overallScore:   result?.overallScore ?? null,
             ctiScore:       ctiSection  ? ctiSection.totalPoints  : null,
@@ -101,14 +105,22 @@ export const submitResults = async (answers, result, context = {}) => {
             body: JSON.stringify(payload),
         });
 
+        const body = await response.json().catch(() => null);
         if (!response.ok) {
-            throw new Error(`Submission failed with HTTP ${response.status}`);
+            console.error('Submission Error:', response.status, body);
+            return {
+                success: false,
+                status: response.status,
+                body,
+            };
         }
 
-        const body = await response.json();
-        return body.success === true;
+        return body;
     } catch (err) {
         console.error('Submission Error:', err);
-        return false;
+        return {
+            success: false,
+            error: err.message,
+        };
     }
 };

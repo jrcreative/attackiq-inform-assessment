@@ -4,7 +4,7 @@ import QuestionBlock from './QuestionBlock';
 import { processResults, calculateSectionScore, getScoreLabel } from '../utils/scoring';
 import RadarChart from './RadarChart';
 import ImpactComplexityMatrix from './ImpactComplexityMatrix';
-import { generatePDF } from '../utils/pdfGenerator';
+import { createDownloadToken, generatePDF } from '../utils/pdfGenerator';
 import { generateMitreJSON } from '../utils/jsonGenerator';
 import { submitResults, buildThreatProfile } from '../utils/api';
 import { buildRecommendationGroups } from '../utils/recommendationEngine';
@@ -49,9 +49,13 @@ const WizardWrapper = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [showMarketoModal, setShowMarketoModal] = useState(false);
     const [pendingDownloadType, setPendingDownloadType] = useState(null);
+    const [downloadToken, setDownloadToken] = useState(null);
+    const [downloadSubmissionId, setDownloadSubmissionId] = useState(null);
+    const [autoDownloadRequested, setAutoDownloadRequested] = useState(false);
     const [userEmail, setUserEmail] = useState(null);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const [historicalResults, setHistoricalResults] = useState([]);
+    const [copiedResubmissionLink, setCopiedResubmissionLink] = useState(false);
     const wizardHeaderRef = useRef(null);
     const containerRef = useRef(null);
     const isInitialMount = useRef(true);
@@ -61,6 +65,44 @@ const WizardWrapper = () => {
     const gateDownloads = marketoConfig.gateDownloads && marketoConfig.formId;
     const ctaUrl = config.contactUrl || '';
     const ctaText = config.contactButtonText || 'Improve Your Score';
+    const showResubmissionLink = Boolean(config.showResubmissionLink);
+
+    const buildResubmissionLink = useCallback((token) => {
+        if (!token || typeof window === 'undefined') {
+            return '';
+        }
+
+        return `${window.location.origin}${window.location.pathname}?download_token=${encodeURIComponent(token)}`;
+    }, []);
+
+    const resubmissionLink = useMemo(() => buildResubmissionLink(downloadToken), [buildResubmissionLink, downloadToken]);
+
+    const handleCopyResubmissionLink = useCallback(async () => {
+        if (!resubmissionLink) {
+            return;
+        }
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(resubmissionLink);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = resubmissionLink;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+
+            setCopiedResubmissionLink(true);
+            window.setTimeout(() => setCopiedResubmissionLink(false), 2000);
+        } catch (err) {
+            console.error('Unable to copy resubmission link', err);
+        }
+    }, [resubmissionLink]);
 
     const sectionEntries = useMemo(
         () => (Array.isArray(data) ? data.filter(isSectionEntry) : []),
@@ -191,21 +233,46 @@ const WizardWrapper = () => {
     const overallScoreLevel = results ? getOverallLevel(results.overallScore) : 0;
     const overallScoreLabel = getScoreLabel(overallScoreLevel);
 
-    const handleNext = async () => {
+    const ensureDownloadSubmission = useCallback(async () => {
+        const finalResults = results || processResults(data, answers, { ctemSkipped });
+        const recs = recommendationGroups.length
+            ? recommendationGroups
+            : buildRecommendationGroups(data, answers, { ctemSkipped });
 
-        if (step === lastQuestionStep - 1) {
-            const finalResults = processResults(data, answers, { ctemSkipped });
-            const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
-
-            submitResults(answers, finalResults, {
-                data,
-                ctemSkipped,
-                lead: userEmail ? { email: userEmail } : {},
-                recommendations: recs,
-            }).then(success => {
-                if (success) console.log('Results Saved!');
-            });
+        let token = downloadToken;
+        if (!token) {
+            token = createDownloadToken();
+            setDownloadToken(token);
         }
+
+        const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const response = await submitResults(answers, finalResults, {
+            data,
+            ctemSkipped,
+            lead: userEmail ? { email: userEmail } : {},
+            recommendations: recs,
+            download_token: token,
+            download_token_expires_at: expiryDate,
+        });
+
+        if (response && response.success) {
+            if (response.submission_id) {
+                setDownloadSubmissionId(response.submission_id);
+            }
+            if (response.download_token) {
+                token = response.download_token;
+                setDownloadToken(token);
+            }
+        }
+
+        return token;
+    }, [answers, ctemSkipped, data, downloadToken, recommendationGroups, results, userEmail]);
+
+    const handleNext = async () => {
+        if (step === lastQuestionStep - 1) {
+            await ensureDownloadSubmission();
+        }
+
         dispatch({ type: 'NEXT_STEP' });
     };
 
@@ -227,6 +294,57 @@ const WizardWrapper = () => {
         setShowDownloadMenu(false);
     }, [results, overallScoreLevel, overallScoreLabel, recommendationGroups]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const searchParams = new URLSearchParams(window.location.search);
+        const token = searchParams.get('download_token') || searchParams.get('token') || searchParams.get('ref');
+        if (!token || token === downloadToken) {
+            return;
+        }
+
+        const fetchSubmission = async () => {
+            setIsGenerating(true);
+            try {
+                const response = await fetch(`${config.rest_url.replace(/\/$/, '')}/download-token/${encodeURIComponent(token)}`);
+                if (!response.ok) {
+                    throw new Error(`Token lookup failed with ${response.status}`);
+                }
+                const body = await response.json();
+                if (!body.success || !body.submission) {
+                    throw new Error('Invalid submission token response');
+                }
+
+                setDownloadToken(token);
+                if (body.submission.id) {
+                    setDownloadSubmissionId(body.submission.id);
+                }
+                if (body.submission.answers) {
+                    dispatch({ type: 'SET_ANSWERS', answers: body.submission.answers });
+                }
+                dispatch({ type: 'GO_TO_STEP', step: lastQuestionStep });
+                setAutoDownloadRequested(true);
+            } catch (err) {
+                console.error('Download token fetch error:', err);
+                setIsGenerating(false);
+            }
+        };
+
+        fetchSubmission();
+    }, [config.rest_url, downloadToken, lastQuestionStep, dispatch, data]);
+
+    useEffect(() => {
+        if (!autoDownloadRequested || !results) {
+            return;
+        }
+
+        const runDownload = async () => {
+            await downloadPDF();
+            setAutoDownloadRequested(false);
+        };
+
+        runDownload();
+    }, [autoDownloadRequested, results, downloadPDF]);
+
     const downloadJSON = useCallback(() => {
         if (!results || !data) return;
 
@@ -247,9 +365,10 @@ const WizardWrapper = () => {
         setShowDownloadMenu(false);
     }, [results, data, answers, ctemSkipped]);
 
-    const handleDownloadRequest = (type) => {
+    const handleDownloadRequest = async (type) => {
         if (gateDownloads && !userEmail) {
             setPendingDownloadType(type);
+            await ensureDownloadSubmission();
             setShowMarketoModal(true);
         } else {
             if (type === 'pdf') {
@@ -376,15 +495,8 @@ const WizardWrapper = () => {
                             if (idx === step) return;
 
                             if (idx === lastQuestionStep && step < lastQuestionStep) {
-                                const finalResults = processResults(data, answers, { ctemSkipped });
-                                const recs = buildRecommendationGroups(data, answers, { ctemSkipped });
-                                submitResults(answers, finalResults, {
-                                    data,
-                                    ctemSkipped,
-                                    lead: userEmail ? { email: userEmail } : {},
-                                    recommendations: recs,
-                                }).then(success => {
-                                    if (success) console.log('Results Saved!');
+                                ensureDownloadSubmission().then(token => {
+                                    if (token) console.log('Results Saved!');
                                 });
                             }
 
@@ -838,6 +950,46 @@ const WizardWrapper = () => {
                 </div>
             </div>
 
+            {showResubmissionLink && isResultsStep && resubmissionLink && (
+                <div style={{
+                    marginTop: '16px',
+                    padding: '12px 14px',
+                    border: '1px solid #e2d4f1',
+                    background: '#f8f5fc',
+                    borderRadius: '8px',
+                    maxWidth: '760px',
+                    textAlign: 'left'
+                }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color: BRAND_COLORS.primary,
+                        marginBottom: '6px'
+                    }}>
+                        Test resubmission link
+                    </div>
+                    <div style={{
+                        fontSize: '12px',
+                        wordBreak: 'break-all',
+                        lineHeight: '1.4',
+                        marginBottom: '8px'
+                    }}>
+                        <a href={resubmissionLink} target="_blank" rel="noreferrer" style={{ color: BRAND_COLORS.primary, textDecoration: 'underline' }}>
+                            {resubmissionLink}
+                        </a>
+                    </div>
+                    <button
+                        className="aiq-btn aiq-btn-secondary"
+                        onClick={handleCopyResubmissionLink}
+                        style={{ padding: '6px 10px', fontSize: '12px' }}
+                    >
+                        {copiedResubmissionLink ? 'Copied!' : 'Copy link'}
+                    </button>
+                </div>
+            )}
+
             <MarketoModal
                 isOpen={showMarketoModal}
                 onClose={() => {
@@ -868,7 +1020,9 @@ const WizardWrapper = () => {
                     threatProfile: buildThreatProfile(data, answers),
                     jsonData: generateMitreJSON(data, answers, { ctemSkipped }),
                     assessmentDate: new Date().toISOString(),
-                    leadSource: 'INFORM Assessment - AttackIQ Website'
+                    leadSource: 'INFORM Assessment - AttackIQ Website',
+                    downloadToken,
+                    submissionId: downloadSubmissionId,
                 } : null}
             />
         </div>

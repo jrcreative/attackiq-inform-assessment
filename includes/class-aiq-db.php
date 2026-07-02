@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class AIQ_DB {
 
-	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION = '1.0.1';
 
 	const VERSION_OPTION_KEY = 'aiq_db_schema_version';
 	const ERROR_LOG_OPTION_KEY = 'aiq_db_errors';
@@ -47,6 +47,8 @@ class AIQ_DB {
 			answers_json LONGTEXT NOT NULL,
 			recommendations_json LONGTEXT NULL,
 			threat_profile_json LONGTEXT NULL,
+			download_token VARCHAR(191) NULL,
+			download_token_expires_at DATETIME NULL,
 			ip VARCHAR(45) NULL,
 			user_agent VARCHAR(255) NULL,
 			PRIMARY KEY  (id),
@@ -94,11 +96,13 @@ class AIQ_DB {
 			'ctem_score'            => isset( $data['ctem_score'] ) ? intval( $data['ctem_score'] ) : null,
 			'ctem_skipped'          => ! empty( $data['ctem_skipped'] ) ? 1 : 0,
 			'maturity_level'        => isset( $data['maturity_level'] ) ? intval( $data['maturity_level'] ) : null,
-			'answers_json'          => wp_json_encode( isset( $data['answers'] ) ? $data['answers'] : array() ),
-			'recommendations_json'  => isset( $data['recommendations'] ) ? wp_json_encode( $data['recommendations'] ) : null,
-			'threat_profile_json'   => isset( $data['threat_profile'] ) ? wp_json_encode( $data['threat_profile'] ) : null,
-			'ip'                    => isset( $data['ip'] ) ? substr( sanitize_text_field( $data['ip'] ), 0, 45 ) : null,
-			'user_agent'            => isset( $data['user_agent'] ) ? substr( sanitize_text_field( $data['user_agent'] ), 0, 255 ) : null,
+			'answers_json'                 => wp_json_encode( isset( $data['answers'] ) ? $data['answers'] : array() ),
+			'recommendations_json'         => isset( $data['recommendations'] ) ? wp_json_encode( $data['recommendations'] ) : null,
+			'threat_profile_json'          => isset( $data['threat_profile'] ) ? wp_json_encode( $data['threat_profile'] ) : null,
+			'download_token'               => isset( $data['download_token'] ) ? substr( sanitize_text_field( $data['download_token'] ), 0, 191 ) : null,
+			'download_token_expires_at'    => isset( $data['download_token_expires_at'] ) ? sanitize_text_field( $data['download_token_expires_at'] ) : null,
+			'ip'                           => isset( $data['ip'] ) ? substr( sanitize_text_field( $data['ip'] ), 0, 45 ) : null,
+			'user_agent'                   => isset( $data['user_agent'] ) ? substr( sanitize_text_field( $data['user_agent'] ), 0, 255 ) : null,
 		);
 
 		$result = $wpdb->insert( $table, $row );
@@ -204,6 +208,16 @@ class AIQ_DB {
 		$id    = intval( $id );
 
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+	}
+
+	public static function get_submission_by_download_token( $token ) {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE download_token = %s", sanitize_text_field( $token ) ),
+			ARRAY_A
+		);
 	}
 
 	public static function delete_submission( $id ) {
