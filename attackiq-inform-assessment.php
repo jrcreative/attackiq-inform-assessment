@@ -65,6 +65,10 @@ class AIQ_Inform_Assessment {
 	public function handle_generate_pdf() {
 		check_admin_referer( 'aiq_generate_pdf' );
 
+		if ( ! $this->check_pdf_rate_limit() ) {
+			wp_die( esc_html__( 'Too many PDF requests. Please try again later.', 'attackiq-inform-assessment' ), '', array( 'response' => 429 ) );
+		}
+
 		$html = isset( $_POST['html'] ) ? wp_unslash( $_POST['html'] ) : '';
 		if ( empty( $html ) ) {
 			wp_die( esc_html__( 'Missing report HTML.', 'attackiq-inform-assessment' ), '', array( 'response' => 400 ) );
@@ -100,6 +104,27 @@ class AIQ_Inform_Assessment {
 		header( 'Content-Length: ' . strlen( $pdf ) );
 		echo $pdf;
 		exit;
+	}
+
+	private function check_pdf_rate_limit() {
+		if ( current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
+		$limit = (int) apply_filters( 'aiq_inform_pdf_rate_limit_per_hour', 20 );
+		if ( $limit <= 0 ) {
+			return true;
+		}
+
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
+		$key = 'aiq_pdf_rate_' . md5( $ip );
+		$count = (int) get_transient( $key );
+		if ( $count >= $limit ) {
+			return false;
+		}
+
+		set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+		return true;
 	}
 
 	private function prepare_pdf_html( $html ) {

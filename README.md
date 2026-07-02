@@ -52,6 +52,8 @@ define( 'AIQ_INFORM_DOCRAPTOR_TEST_MODE', true );
 
 The same value can still be overridden with the `aiq_inform_docraptor_test_mode` filter.
 
+Unauthenticated PDF requests are rate-limited to 20 requests per IP per hour by default. Adjust this with the `aiq_inform_pdf_rate_limit_per_hour` filter, or return `0` to disable the limit.
+
 ### Staging Diagnostics
 
 The test resubmission link on the results page is hidden by default. Enable it in staging with:

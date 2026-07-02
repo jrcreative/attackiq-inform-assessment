@@ -159,6 +159,14 @@ class AIQ_API {
 		if ( ! is_wp_error( $submission_id ) ) {
 			$response['submission_id'] = $submission_id;
 		} else {
+			if ( ! empty( $download_token ) ) {
+				$existing = AIQ_DB::get_submission_by_download_token( $download_token );
+				if ( $existing ) {
+					$response['submission_id'] = intval( $existing['id'] );
+					$response['warning'] = 'Submission already exists for download token';
+					return rest_ensure_response( $response );
+				}
+			}
 
 			$response['warning'] = 'Submission saved to legacy storage only';
 		}
@@ -239,23 +247,8 @@ class AIQ_API {
 			'success' => true,
 			'submission' => array(
 				'id'                  => intval( $row['id'] ),
-				'created_at'          => $row['created_at'],
-				'email'               => $row['email'],
-				'first_name'          => $row['first_name'],
-				'last_name'           => $row['last_name'],
-				'company'             => $row['company'],
 				'answers'             => $this->maybe_decode( $row['answers_json'] ),
-				'recommendations'     => $this->maybe_decode( $row['recommendations_json'] ),
-				'threat_profile'      => $this->maybe_decode( $row['threat_profile_json'] ),
-				'overall_score'       => null !== $row['overall_score'] ? floatval( $row['overall_score'] ) : null,
-				'cti_score'           => null !== $row['cti_score'] ? intval( $row['cti_score'] ) : null,
-				'dm_score'            => null !== $row['dm_score'] ? intval( $row['dm_score'] ) : null,
-				'te_score'            => null !== $row['te_score'] ? intval( $row['te_score'] ) : null,
-				'ctem_score'          => null !== $row['ctem_score'] ? intval( $row['ctem_score'] ) : null,
 				'ctem_skipped'        => (bool) $row['ctem_skipped'],
-				'maturity_level'      => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
-				'download_token'      => $row['download_token'],
-				'download_token_expires_at' => $row['download_token_expires_at'],
 			),
 		);
 

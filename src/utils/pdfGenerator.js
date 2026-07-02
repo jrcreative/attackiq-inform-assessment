@@ -1,4 +1,5 @@
 import { getScoreLabel } from './scoring';
+import { createDownloadToken } from './downloadLinks';
 
 const PAGE_WIDTH = 880;
 const PAGE_HEIGHT = 1120;
@@ -201,18 +202,6 @@ const splitRecommendations = (groups) => {
     }
     return chunks;
 };
-
-const createDownloadToken = () => {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-        const array = new Uint8Array(16);
-        window.crypto.getRandomValues(array);
-        const randomString = Array.from(array).map((byte) => byte.toString(36).padStart(2, '0')).join('').slice(0, 24);
-        return `aiq_${randomString}`;
-    }
-    return `aiq_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-};
-
-export { createDownloadToken };
 
 const getCookieValue = (name) => {
     if (typeof document === 'undefined') return '';
@@ -896,7 +885,7 @@ export const buildReportHtml = ({
     `;
 };
 
-export const generatePDF = async (elementId, filename = 'AttackIQ-INFORM-Assessment-Report.pdf', scores = {}) => {
+export const generatePDF = async (filename = 'AttackIQ-INFORM-Assessment-Report.pdf', scores = {}) => {
     const {
         results,
         overallLevel,
@@ -938,7 +927,7 @@ ${reportHtml}
 </html>`;
 
     const frameName = 'aiq-pdf-download-frame';
-    const downloadToken = createDownloadToken();
+    const pdfCompletionToken = createDownloadToken();
     let frame = document.querySelector(`iframe[name="${frameName}"]`);
     if (!frame) {
         frame = document.createElement('iframe');
@@ -963,7 +952,7 @@ ${reportHtml}
         action: 'aiq_generate_pdf',
         _wpnonce: config.pdf_nonce,
         filename,
-        download_token: downloadToken,
+        download_token: pdfCompletionToken,
         html: reportDocument,
     };
 
@@ -978,7 +967,7 @@ ${reportHtml}
     form.submit();
     form.remove();
 
-    const completed = await waitForDownloadCookie(downloadToken);
+    const completed = await waitForDownloadCookie(pdfCompletionToken);
     if (!completed) {
         console.warn('PDF download did not confirm completion before the loader timed out.');
     }
