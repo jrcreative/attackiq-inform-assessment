@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class AIQ_DB {
 
-	const SCHEMA_VERSION = '1.0.1';
+	const SCHEMA_VERSION = '1.0.2';
 
 	const VERSION_OPTION_KEY = 'aiq_db_schema_version';
 	const ERROR_LOG_OPTION_KEY = 'aiq_db_errors';
@@ -56,7 +56,8 @@ class AIQ_DB {
 			KEY idx_email (email),
 			KEY idx_sector (sector),
 			KEY idx_overall (overall_score),
-			KEY idx_cpt_post_id (cpt_post_id)
+			KEY idx_cpt_post_id (cpt_post_id),
+			UNIQUE KEY idx_download_token (download_token)
 		) {$charset_collate};";
 
 		dbDelta( $sql );

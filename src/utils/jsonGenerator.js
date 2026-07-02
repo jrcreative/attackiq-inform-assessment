@@ -144,37 +144,4 @@ export const generateMitreJSON = (rawData, userAnswers, results = {}) => {
     return mitreJSON;
 };
 
-export const validateMitreJSON = (json) => {
-    const errors = [];
-
-    if (!json || typeof json !== 'object') {
-        return { valid: false, errors: ['Payload is not an object'] };
-    }
-
-    if (!Array.isArray(json.sections)) {
-        errors.push('Missing or invalid "sections" array');
-    }
-
-    if (!json.downloadedDate) {
-        errors.push('Missing "downloadedDate" field');
-    }
-
-    if (Array.isArray(json.sections)) {
-        json.sections.forEach((section, idx) => {
-            if (section.questions) {
-                if (!section.section_id) errors.push(`Section ${idx}: Missing section_id`);
-                if (!section.name) errors.push(`Section ${idx}: Missing name`);
-                if (!section.shortname) errors.push(`Section ${idx}: Missing shortname`);
-            } else if (section.overallScore === undefined) {
-                errors.push(`Section ${idx}: Missing overallScore`);
-            }
-        });
-    }
-
-    return {
-        valid: errors.length === 0,
-        errors
-    };
-};
-
 export default generateMitreJSON;

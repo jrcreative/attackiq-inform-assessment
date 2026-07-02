@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { buildDownloadTokenLink } from '../utils/downloadLinks';
 const MarketoModal = ({
     isOpen,
     onClose,
@@ -74,9 +75,7 @@ const MarketoModal = ({
 
                                     const joinList = (v) => Array.isArray(v) ? v.join('; ') : (v || '');
 
-                                    const downloadLink = assessmentData.downloadToken
-                                        ? `${window.location.origin}${window.location.pathname}?download_token=${encodeURIComponent(assessmentData.downloadToken)}`
-                                        : '';
+                                    const downloadLink = buildDownloadTokenLink(assessmentData.downloadToken);
 
                                     const hiddenValues = {
                                         INFORM_Security_Assessment__c: assessmentData.jsonData
@@ -108,7 +107,9 @@ const MarketoModal = ({
                                     try {
                                         form.setValues(hiddenValues);
                                     } catch (err) {
-                                        console.log('Some hidden fields may not exist in Marketo form:', err);
+                                        if (window.aiqInformData?.debug) {
+                                            console.log('Some hidden fields may not exist in Marketo form:', err);
+                                        }
                                     }
 
                                     const formElement = document.getElementById(`mktoForm_${formId}`);

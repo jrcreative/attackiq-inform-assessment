@@ -4,7 +4,8 @@ import QuestionBlock from './QuestionBlock';
 import { processResults, calculateSectionScore, getScoreLabel } from '../utils/scoring';
 import RadarChart from './RadarChart';
 import ImpactComplexityMatrix from './ImpactComplexityMatrix';
-import { createDownloadToken, generatePDF } from '../utils/pdfGenerator';
+import { generatePDF } from '../utils/pdfGenerator';
+import { buildDownloadTokenLink, createDownloadToken } from '../utils/downloadLinks';
 import { generateMitreJSON } from '../utils/jsonGenerator';
 import { submitResults, buildThreatProfile } from '../utils/api';
 import { buildRecommendationGroups } from '../utils/recommendationEngine';
@@ -67,15 +68,7 @@ const WizardWrapper = () => {
     const ctaText = config.contactButtonText || 'Improve Your Score';
     const showResubmissionLink = Boolean(config.showResubmissionLink);
 
-    const buildResubmissionLink = useCallback((token) => {
-        if (!token || typeof window === 'undefined') {
-            return '';
-        }
-
-        return `${window.location.origin}${window.location.pathname}?download_token=${encodeURIComponent(token)}`;
-    }, []);
-
-    const resubmissionLink = useMemo(() => buildResubmissionLink(downloadToken), [buildResubmissionLink, downloadToken]);
+    const resubmissionLink = useMemo(() => buildDownloadTokenLink(downloadToken), [downloadToken]);
 
     const handleCopyResubmissionLink = useCallback(async () => {
         if (!resubmissionLink) {
@@ -234,6 +227,10 @@ const WizardWrapper = () => {
     const overallScoreLabel = getScoreLabel(overallScoreLevel);
 
     const ensureDownloadSubmission = useCallback(async () => {
+        if (downloadToken && downloadSubmissionId) {
+            return downloadToken;
+        }
+
         const finalResults = results || processResults(data, answers, { ctemSkipped });
         const recs = recommendationGroups.length
             ? recommendationGroups
@@ -266,7 +263,7 @@ const WizardWrapper = () => {
         }
 
         return token;
-    }, [answers, ctemSkipped, data, downloadToken, recommendationGroups, results, userEmail]);
+    }, [answers, ctemSkipped, data, downloadSubmissionId, downloadToken, recommendationGroups, results, userEmail]);
 
     const handleNext = async () => {
         if (step === lastQuestionStep - 1) {
@@ -279,7 +276,7 @@ const WizardWrapper = () => {
     const downloadPDF = useCallback(async () => {
         setIsGenerating(true);
         try {
-            await generatePDF('aiq-results-print-area', 'AttackIQ-INFORM-Assessment-Report.pdf', {
+            await generatePDF('AttackIQ-INFORM-Assessment-Report.pdf', {
                 results,
                 overallLevel: overallScoreLevel,
                 overallLabel: overallScoreLabel,
@@ -292,7 +289,7 @@ const WizardWrapper = () => {
         }
         setIsGenerating(false);
         setShowDownloadMenu(false);
-    }, [results, overallScoreLevel, overallScoreLabel, recommendationGroups]);
+    }, [results, overallScoreLevel, overallScoreLabel, recommendationGroups, data, answers]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -321,6 +318,7 @@ const WizardWrapper = () => {
                 if (body.submission.answers) {
                     dispatch({ type: 'SET_ANSWERS', answers: body.submission.answers });
                 }
+                dispatch({ type: 'SET_CTEM_SKIPPED', value: Boolean(body.submission.ctem_skipped) });
                 dispatch({ type: 'GO_TO_STEP', step: lastQuestionStep });
                 setAutoDownloadRequested(true);
             } catch (err) {
@@ -496,7 +494,7 @@ const WizardWrapper = () => {
 
                             if (idx === lastQuestionStep && step < lastQuestionStep) {
                                 ensureDownloadSubmission().then(token => {
-                                    if (token) console.log('Results Saved!');
+                                    if (token && config.debug) console.log('Results Saved!');
                                 });
                             }
 
