@@ -17,6 +17,19 @@ class AIQ_API {
 			'permission_callback' => array( $this, 'submission_permission_check' ),
 		) );
 
+		register_rest_route( 'aiq/v1', '/download-token/(?P<token>[a-zA-Z0-9_-]+)', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'handle_get_submission_by_token' ),
+			'permission_callback' => '__return_true',
+			'args'                => array(
+				'token' => array(
+					'validate_callback' => function( $value ) {
+						return is_string( $value ) && preg_match( '/^[a-zA-Z0-9_-]+$/', $value );
+					},
+				),
+			),
+		) );
+
 		register_rest_route( 'aiq/v1', '/submissions', array(
 			'methods'             => 'GET',
 			'callback'            => array( $this, 'handle_list_submissions' ),
@@ -74,6 +87,15 @@ class AIQ_API {
 		$tp      = isset( $params['threatProfile'] ) && is_array( $params['threatProfile'] ) ? $params['threatProfile'] : array();
 		$recs    = isset( $params['recommendations'] ) ? $params['recommendations'] : null;
 
+		$download_token = isset( $params['download_token'] ) ? sanitize_text_field( $params['download_token'] ) : null;
+		$download_token_expires_at = null;
+		if ( ! empty( $params['download_token_expires_at'] ) ) {
+			$timestamp = strtotime( sanitize_text_field( $params['download_token_expires_at'] ) );
+			if ( false !== $timestamp ) {
+				$download_token_expires_at = date( 'Y-m-d H:i:s', $timestamp );
+			}
+		}
+
 		$email = isset( $lead['email'] ) ? sanitize_email( $lead['email'] )
 			: ( isset( $params['email'] ) ? sanitize_email( $params['email'] ) : '' );
 
@@ -116,10 +138,12 @@ class AIQ_API {
 			'ctem_skipped'   => ! empty( $result['ctemSkipped'] ),
 			'maturity_level' => isset( $result['maturityLevel'] ) ? $result['maturityLevel'] : null,
 			'answers'        => $this->sanitize_recursive( $answers ),
-			'recommendations' => $this->sanitize_recursive( $recs ),
-			'threat_profile' => $this->sanitize_recursive( $tp ),
-			'ip'             => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '',
-			'user_agent'     => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
+			'recommendations'               => $this->sanitize_recursive( $recs ),
+			'threat_profile'                => $this->sanitize_recursive( $tp ),
+			'download_token'                => $download_token,
+			'download_token_expires_at'     => $download_token_expires_at,
+			'ip'                            => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '',
+			'user_agent'                    => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
 		);
 
 		$submission_id = AIQ_DB::insert_submission( $table_row );
@@ -128,6 +152,8 @@ class AIQ_API {
 			'success' => true,
 			'id'      => $cpt_post_id,
 			'message' => 'Assessment saved successfully',
+			'download_token' => $download_token,
+			'download_token_expires_at' => $download_token_expires_at,
 		);
 
 		if ( ! is_wp_error( $submission_id ) ) {
@@ -195,6 +221,45 @@ class AIQ_API {
 			'ctem_skipped'   => (bool) $row['ctem_skipped'],
 			'maturity_level' => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
 		);
+	}
+
+	public function handle_get_submission_by_token( $request ) {
+		$token = sanitize_text_field( $request['token'] );
+		$row = AIQ_DB::get_submission_by_download_token( $token );
+
+		if ( ! $row ) {
+			return new WP_Error( 'aiq_submission_not_found', 'Submission not found', array( 'status' => 404 ) );
+		}
+
+		if ( ! empty( $row['download_token_expires_at'] ) && strtotime( $row['download_token_expires_at'] ) < time() ) {
+			return new WP_Error( 'aiq_token_expired', 'Download token has expired', array( 'status' => 410 ) );
+		}
+
+		$response = array(
+			'success' => true,
+			'submission' => array(
+				'id'                  => intval( $row['id'] ),
+				'created_at'          => $row['created_at'],
+				'email'               => $row['email'],
+				'first_name'          => $row['first_name'],
+				'last_name'           => $row['last_name'],
+				'company'             => $row['company'],
+				'answers'             => $this->maybe_decode( $row['answers_json'] ),
+				'recommendations'     => $this->maybe_decode( $row['recommendations_json'] ),
+				'threat_profile'      => $this->maybe_decode( $row['threat_profile_json'] ),
+				'overall_score'       => null !== $row['overall_score'] ? floatval( $row['overall_score'] ) : null,
+				'cti_score'           => null !== $row['cti_score'] ? intval( $row['cti_score'] ) : null,
+				'dm_score'            => null !== $row['dm_score'] ? intval( $row['dm_score'] ) : null,
+				'te_score'            => null !== $row['te_score'] ? intval( $row['te_score'] ) : null,
+				'ctem_score'          => null !== $row['ctem_score'] ? intval( $row['ctem_score'] ) : null,
+				'ctem_skipped'        => (bool) $row['ctem_skipped'],
+				'maturity_level'      => null !== $row['maturity_level'] ? intval( $row['maturity_level'] ) : null,
+				'download_token'      => $row['download_token'],
+				'download_token_expires_at' => $row['download_token_expires_at'],
+			),
+		);
+
+		return rest_ensure_response( $response );
 	}
 
 	public function handle_get_submission( $request ) {

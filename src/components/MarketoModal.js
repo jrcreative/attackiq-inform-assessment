@@ -74,6 +74,10 @@ const MarketoModal = ({
 
                                     const joinList = (v) => Array.isArray(v) ? v.join('; ') : (v || '');
 
+                                    const downloadLink = assessmentData.downloadToken
+                                        ? `${window.location.origin}${window.location.pathname}?download_token=${encodeURIComponent(assessmentData.downloadToken)}`
+                                        : '';
+
                                     const hiddenValues = {
                                         INFORM_Security_Assessment__c: assessmentData.jsonData
                                             ? JSON.stringify(assessmentData.jsonData)
@@ -94,8 +98,10 @@ const MarketoModal = ({
 
                                         INFORM_Assessment_Date__c: assessmentData.assessmentDate || new Date().toISOString(),
                                         INFORM_Download_Type__c: downloadType,
-
-                                        INFORM_Assessment_Completed__c: 'true',
+                                        INFORM_Download_Token__c: assessmentData.downloadToken || '',
+                                        INFORM_Download_Link__c: downloadLink,
+                                        iNFORMSecurityAssessmentpdf: downloadLink,
+                                        INFORM_Submission_ID__c: assessmentData.submissionId || '',
                                         LeadSource: assessmentData.leadSource || 'INFORM Assessment'
                                     };
 

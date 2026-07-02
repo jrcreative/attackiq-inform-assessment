@@ -30,6 +30,8 @@ function assessmentReducer(state, action) {
             };
         case 'GO_TO_STEP':
             return { ...state, step: action.step };
+        case 'SET_ANSWERS':
+            return { ...state, answers: action.answers };
         case 'SET_CTEM_SKIPPED':
             writeCtemExplicitSkip(Boolean(action.value));
             return { ...state, ctemSkipped: Boolean(action.value) };

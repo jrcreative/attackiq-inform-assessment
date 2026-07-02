@@ -36,7 +36,7 @@ Once activated, you can configure the plugin settings via the WordPress Admin Da
 
 ### Server-Side PDF Generation
 
-PDF reports are rendered through the DocRaptor API service. The plugin sends the generated report HTML to DocRaptor in test mode, which creates watermarked PDFs while testing.
+PDF reports are rendered through the DocRaptor API service. Production PDF generation defaults to live mode.
 
 To override the bundled API key, define `AIQ_INFORM_DOCRAPTOR_API_KEY` before WordPress loads:
 
@@ -44,7 +44,23 @@ To override the bundled API key, define `AIQ_INFORM_DOCRAPTOR_API_KEY` before Wo
 define( 'AIQ_INFORM_DOCRAPTOR_API_KEY', 'your-docraptor-api-key' );
 ```
 
-Test mode currently defaults to `true`. Developers can override the flag with the `aiq_inform_docraptor_test_mode` filter when production PDF generation is ready.
+Enable DocRaptor test mode in staging with a constant or environment variable:
+
+```php
+define( 'AIQ_INFORM_DOCRAPTOR_TEST_MODE', true );
+```
+
+The same value can still be overridden with the `aiq_inform_docraptor_test_mode` filter.
+
+### Staging Diagnostics
+
+The test resubmission link on the results page is hidden by default. Enable it in staging with:
+
+```php
+define( 'AIQ_INFORM_SHOW_RESUBMISSION_LINK', true );
+```
+
+The value can also be overridden with the `aiq_inform_show_resubmission_link` filter.
 
 ## Usage
 
@@ -229,6 +245,7 @@ All multi-select values (Threat Profile regulatory frameworks, data sensitivity 
 | `INFORM_TE_Score__c` | Test & Evaluation maturity level (0-5) |
 | `INFORM_Assessment_Date__c` | ISO timestamp of submission |
 | `INFORM_Download_Type__c` | `PDF` or `JSON` |
+| `iNFORMSecurityAssessmentpdf` | Tokenized PDF download link |
 | `INFORM_Assessment_Completed__c` | `true` |
 
 ### New fields for Phase 2

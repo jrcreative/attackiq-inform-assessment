@@ -153,14 +153,29 @@ class AIQ_Inform_Assessment {
 		return apply_filters( 'aiq_inform_docraptor_api_key', $api_key );
 	}
 
+	private function get_boolean_config( $constant_name, $env_name, $default = false ) {
+		if ( defined( $constant_name ) ) {
+			return (bool) constant( $constant_name );
+		}
+
+		$value = getenv( $env_name );
+		if ( false === $value ) {
+			return (bool) $default;
+		}
+
+		return filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) ?? (bool) $default;
+	}
+
 	private function render_pdf_with_docraptor( $html, $filename ) {
 		$api_key = $this->get_docraptor_api_key();
 		if ( empty( $api_key ) ) {
 			return new WP_Error( 'aiq_pdf_docraptor_missing_key', __( 'DocRaptor API key is not configured.', 'attackiq-inform-assessment' ) );
 		}
 
+		$test_mode = $this->get_boolean_config( 'AIQ_INFORM_DOCRAPTOR_TEST_MODE', 'AIQ_INFORM_DOCRAPTOR_TEST_MODE', false );
+
 		$payload = array(
-			'test'             => (bool) apply_filters( 'aiq_inform_docraptor_test_mode', true ),
+			'test'             => (bool) apply_filters( 'aiq_inform_docraptor_test_mode', $test_mode ),
 			'type'             => 'pdf',
 			'pipeline'         => '10.1',
 			'name'             => $filename,
@@ -247,6 +262,8 @@ class AIQ_Inform_Assessment {
 		wp_enqueue_script( 'aiq-inform-assessment' );
         wp_enqueue_style( 'aiq-inform-assessment-style' );
 
+		$show_resubmission_link = $this->get_boolean_config( 'AIQ_INFORM_SHOW_RESUBMISSION_LINK', 'AIQ_INFORM_SHOW_RESUBMISSION_LINK', false );
+
 		wp_localize_script( 'aiq-inform-assessment', 'aiqInformData', array(
             'root_id' => 'aiq-inform-assessment-root',
 			'ajax_url' => admin_url( 'admin-ajax.php' ),
@@ -264,6 +281,7 @@ class AIQ_Inform_Assessment {
 			),
 			'contactUrl' => esc_url( get_option( 'aiq_contact_url', '' ) ),
 			'contactButtonText' => sanitize_text_field( get_option( 'aiq_contact_button_text', 'Improve Your Score' ) ),
+			'showResubmissionLink' => (bool) apply_filters( 'aiq_inform_show_resubmission_link', $show_resubmission_link ),
         ));
 
 		return '<div id="aiq-inform-assessment-root">Loading Assessment...</div>';
